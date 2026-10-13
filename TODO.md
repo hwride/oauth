@@ -4,7 +4,6 @@
 
 Some potential things that could be added to this auth server.
 
-- [ ] Support public clients - i.e. without client authentication.
 - [ ] Tidy up tests
 - [ ] Add /userinfo support for opqaue access tokens
 - [ ] Support client_credentials grant (incl access tokens without a subject)
@@ -20,6 +19,7 @@ Some potential things that could be added to this auth server.
 - [ ] Auth server session
 - [ ] Make auth server state be stored server side rather than shared by query params between sign in/sign up.
 - [ ] Support multiple resource indicators in a single request
+- [x] Support public clients - i.e. without client authentication.
 - [x] Auth server filtering of scopes per provided resource
 - [x] RBAC
 - [x] Resource indicators https://datatracker.ietf.org/doc/html/rfc8707

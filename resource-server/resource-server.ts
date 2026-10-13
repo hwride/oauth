@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import {
   getResourceServerConfig,
   type ResourceServerConfig,
@@ -21,9 +21,7 @@ export async function main() {
 
   try {
     await fastify.listen({
-      port: Number(
-        process.env.RESOURCE_SERVER_PORT ?? defaultResourceServerPort,
-      ),
+      port: getResourceServerPort(),
     });
     fastify.log.info("Resource server is booted");
     return fastify;
@@ -47,6 +45,8 @@ export function createServer(serverConfig: ResourceServerConfig) {
     disableRequestLogging: true,
   });
 
+  logResourceServerConfig(fastify, serverConfig);
+
   const orderStore = createDefaultOrderStore();
   const productStore = createDefaultProductStore();
 
@@ -55,4 +55,25 @@ export function createServer(serverConfig: ResourceServerConfig) {
   registerProductsRoute(fastify, serverConfig, productStore);
 
   return fastify;
+}
+
+function logResourceServerConfig(
+  fastify: FastifyInstance,
+  serverConfig: ResourceServerConfig,
+) {
+  fastify.log.info(
+    {
+      port: getResourceServerPort(),
+      resourceIds: serverConfig.resourceIds,
+      acceptedAccessTokenAlgorithms: serverConfig.acceptedAccessTokenAlgorithms,
+      authServerBase: serverConfig.authServerBase,
+      issuer: serverConfig.issuer,
+      jwksUri: serverConfig.jwksUri,
+    },
+    "Resource server config",
+  );
+}
+
+function getResourceServerPort() {
+  return Number(process.env.RESOURCE_SERVER_PORT ?? defaultResourceServerPort);
 }
