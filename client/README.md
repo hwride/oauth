@@ -5,12 +5,18 @@ An OAuth Client. Mainly implemented for testing and learning. Not for use in pro
 ## Run
 
 1. Set required environment variables:
+
 - `AUTH_SERVER_BASE`
 - `CLIENT_ID`
-- `CLIENT_SECRET`
+- `CLIENT_SECRET` if using a confidential client.
+
 1. Optionally set:
+
+- `CLIENT_AUTH_METHOD` to `none` for a public clients. Defaults to `client_secret_basic` for confidential clients.
 - `DEFAULT_RESOURCE` to prefill the API resource field
 - `DEFAULT_AUDIENCE` to prefill the API audience field
 - `DEFAULT_SCOPES` to select known scope checkboxes and prefill additional scopes
+
 1. Start the development server:
+
 - `npm run dev`

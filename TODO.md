@@ -4,10 +4,10 @@
 
 Some potential things that could be added to this auth server.
 
+- [ ] Support public clients - i.e. without client authentication.
 - [ ] Tidy up tests
 - [ ] Add /userinfo support for opqaue access tokens
 - [ ] Support client_credentials grant (incl access tokens without a subject)
-- [ ] Support public clients - i.e. without client authentication.
 - [ ] Refresh token rotation
 - [ ] Refresh token revocation
 - [ ] Support key rotation
