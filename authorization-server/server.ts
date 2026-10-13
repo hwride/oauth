@@ -1,5 +1,6 @@
 import formbody from "@fastify/formbody";
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
+import { clientsConfig, type ClientConfig } from "./config/clients-config.ts";
 import { getServerConfig, type ServerConfig } from "./config/server-config.ts";
 import { defaultUsers } from "./default-users.ts";
 import { registerAuthorizationRoute } from "./routes/authorization-route.ts";
@@ -30,9 +31,7 @@ export async function main() {
 
   try {
     await fastify.listen({
-      port: Number(
-        process.env.AUTH_SERVER_PORT ?? defaultAuthorizationServerPort,
-      ),
+      port: getAuthorizationServerPort(),
     });
     fastify.log.info("Authorization server is booted");
     return fastify;
@@ -65,6 +64,8 @@ export async function createServer(
     disableRequestLogging: true,
   });
 
+  logAuthorizationServerConfig(fastify, resolvedServerConfig);
+
   fastify.register(formbody);
 
   registerOpenIdConfigurationRoute(fastify, resolvedServerConfig);
@@ -87,4 +88,41 @@ export async function createServer(
   registerUserinfoRoute(fastify, resolvedServerConfig, userStore);
 
   return fastify;
+}
+
+function logAuthorizationServerConfig(
+  fastify: FastifyInstance,
+  serverConfig: ServerConfig,
+) {
+  fastify.log.info(
+    {
+      port: getAuthorizationServerPort(),
+      issuer: serverConfig.issuer,
+      authorizationEndpoint: serverConfig.authorizationEndpoint,
+      tokenEndpoint: serverConfig.tokenEndpoint,
+      jwksUri: serverConfig.jwksUri,
+      authorizationCodeLifetimeSeconds:
+        serverConfig.authorizationCodeLifetimeSeconds,
+      clients: clientsConfig.map(function (client) {
+        return {
+          clientId: client.clientId,
+          clientAuthMethod: client.clientAuthMethod,
+          clientSecret:
+            "clientSecret" in client && client.clientSecret
+              ? "<redacted-non-empty>"
+              : null,
+          redirectUris: client.redirectUris,
+          accessTokenType: client.accessTokenType,
+          accessTokenLifetimeSeconds: client.accessTokenLifetimeSeconds,
+          idTokenLifetimeSeconds: client.idTokenLifetimeSeconds,
+          refreshTokenLifetimeSeconds: client.refreshTokenLifetimeSeconds,
+        };
+      }),
+    },
+    "Authorization server config",
+  );
+}
+
+function getAuthorizationServerPort() {
+  return Number(process.env.AUTH_SERVER_PORT ?? defaultAuthorizationServerPort);
 }

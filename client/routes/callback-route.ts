@@ -49,6 +49,7 @@ export function registerCallbackRoute(
       authFlowContext,
       clientId: process.env.CLIENT_ID,
       clientSecret: process.env.CLIENT_SECRET,
+      clientAuthMethod: process.env.CLIENT_AUTH_METHOD,
       log: fastify.log,
     });
 
@@ -101,13 +102,11 @@ async function makeTokenRequest(args: {
   authFlowContext: AuthFlowContext;
   clientId: string | undefined;
   clientSecret: string | undefined;
+  clientAuthMethod: string | undefined;
   log: FastifyInstance["log"];
 }): Promise<Response> {
   // OAuth, Access Token Request - https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
   const tokenUrl = new URL(args.authFlowContext.tokenEndpoint);
-  const basicAuth = Buffer.from(
-    `${args.clientId}:${args.clientSecret}`,
-  ).toString("base64");
 
   const tokenRequestBody = new URLSearchParams({
     grant_type: "authorization_code",
@@ -118,17 +117,30 @@ async function makeTokenRequest(args: {
     tokenRequestBody.set("code_verifier", args.authFlowContext.codeVerifier);
   }
 
+  const headers: Record<string, string> = {
+    "content-type": "application/x-www-form-urlencoded",
+  };
+
+  // Public clients don't authenticate, but they must then provide client_id on the token request.
+  if (args.clientAuthMethod === "none") {
+    tokenRequestBody.set("client_id", args.clientId ?? "");
+  }
+  // Confidential clients can authenticate with Basic auth. Default behaviour.
+  else {
+    const basicAuth = Buffer.from(
+      `${args.clientId}:${args.clientSecret}`,
+    ).toString("base64");
+    headers.authorization = `Basic ${basicAuth}`;
+  }
+
   args.log.info(
-    { url: tokenUrl, body: tokenRequestBody.toString() },
+    { url: tokenUrl, headers, body: tokenRequestBody.toString() },
     "/callback - Access Token Request",
   );
 
   return fetch(tokenUrl.toString(), {
     method: "POST",
-    headers: {
-      authorization: `Basic ${basicAuth}`,
-      "content-type": "application/x-www-form-urlencoded",
-    },
+    headers,
     body: tokenRequestBody.toString(),
   });
 }

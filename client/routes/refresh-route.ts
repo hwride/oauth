@@ -34,6 +34,7 @@ export function registerRefreshRoute(
       authFlowContext,
       clientId: process.env.CLIENT_ID,
       clientSecret: process.env.CLIENT_SECRET,
+      clientAuthMethod: process.env.CLIENT_AUTH_METHOD,
       log: fastify.log,
     });
 
@@ -70,17 +71,31 @@ async function makeRefreshTokenRequest(args: {
   authFlowContext: AuthFlowContext;
   clientId: string | undefined;
   clientSecret: string | undefined;
+  clientAuthMethod: string | undefined;
   log: FastifyInstance["log"];
 }): Promise<Response> {
   const tokenUrl = new URL(args.authFlowContext.tokenEndpoint);
-  const basicAuth = Buffer.from(
-    `${args.clientId}:${args.clientSecret}`,
-  ).toString("base64");
 
   const tokenRequestBody = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: args.refreshToken,
   });
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/x-www-form-urlencoded",
+  };
+
+  // Public clients don't authenticate, but they must then provide client_id on the
+  if (args.clientAuthMethod === "none") {
+    tokenRequestBody.set("client_id", args.clientId ?? "");
+  }
+  // Confidential clients can authenticate with Basic auth. Default behaviour.
+  else {
+    const basicAuth = Buffer.from(
+      `${args.clientId}:${args.clientSecret}`,
+    ).toString("base64");
+    headers.Authorization = `Basic ${basicAuth}`;
+  }
 
   args.log.info(
     { url: tokenUrl, body: tokenRequestBody.toString() },
@@ -89,10 +104,7 @@ async function makeRefreshTokenRequest(args: {
 
   return fetch(tokenUrl.toString(), {
     method: "POST",
-    headers: {
-      Authorization: `Basic ${basicAuth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
+    headers,
     body: tokenRequestBody.toString(),
   });
 }

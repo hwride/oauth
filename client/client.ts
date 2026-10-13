@@ -36,6 +36,22 @@ export async function main() {
   }
 }
 
+function logClientConfig(fastify: FastifyInstance) {
+  fastify.log.info(
+    {
+      port: getClientPort(),
+      clientId: process.env.CLIENT_ID,
+      clientSecret: process.env.CLIENT_SECRET ? "<redacted-non-empty>" : null,
+      clientAuthMethod: process.env.CLIENT_AUTH_METHOD,
+      authServerBase: process.env.AUTH_SERVER_BASE,
+      defaultResource: process.env.DEFAULT_RESOURCE,
+      defaultAudience: process.env.DEFAULT_AUDIENCE,
+      defaultScopes: process.env.DEFAULT_SCOPES,
+    },
+    "Client config",
+  );
+}
+
 export async function createServer() {
   const clientPort = getClientPort();
   const fastify = Fastify({
@@ -50,6 +66,8 @@ export async function createServer() {
     },
     disableRequestLogging: true,
   });
+
+  logClientConfig(fastify);
 
   await fastify.register(formbody);
 

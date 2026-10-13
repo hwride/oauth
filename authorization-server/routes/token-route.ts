@@ -10,6 +10,8 @@ import type { UserStore } from "../stores/user-store.ts";
 
 type TokenRequestBody = {
   grant_type?: string;
+  /** Only required if not using client authentication. */
+  client_id?: string;
   // Authorization code grant.
   code?: string;
   redirect_uri?: string;
@@ -57,34 +59,75 @@ export function registerTokenRoute(
   fastify.post<{
     Body: TokenRequestBody;
   }>(tokenEndpointPath, async function (request, reply) {
-    // Check client authentication
-    // OAuth 2.3, Client Authentication
-    // https://datatracker.ietf.org/doc/html/rfc6749#section-2.3
-    const clientCredentials = parseBasicAuthorizationHeader(
-      request.headers.authorization,
-    );
-    if (!clientCredentials) {
-      return reply
-        .code(401)
-        .header("www-authenticate", 'Basic realm="token"')
-        .send({
-          error: "invalid_client",
-        });
-    }
+    let clientConfig: ClientConfig;
 
-    const clientConfig = clientsConfig.find(function (client) {
-      return client.clientId === clientCredentials.clientId;
-    });
-    if (
-      !clientConfig ||
-      clientConfig.clientSecret !== clientCredentials.clientSecret
-    ) {
-      return reply
-        .code(401)
-        .header("www-authenticate", 'Basic realm="token"')
-        .send({
+    // OAuth 2.0, Client Authentication
+    // https://datatracker.ietf.org/doc/html/rfc6749#section-2.3
+    if (request.headers.authorization != null) {
+      const clientCredentials = parseBasicAuthorizationHeader(
+        request.headers.authorization,
+      );
+      if (!clientCredentials) {
+        return reply
+          .code(401)
+          .header("www-authenticate", 'Basic realm="token"')
+          .send({
+            error: "invalid_client",
+          });
+      }
+
+      // Find a configured client matching the client ID in the given credentials.
+      clientConfig = clientsConfig.find(function (client) {
+        return client.clientId === clientCredentials.clientId;
+      });
+
+      // Check if matching client is configured to support basic auth and the secret matches.
+      if (
+        clientConfig == null ||
+        clientConfig.clientAuthMethod !== "client_secret_basic" ||
+        clientConfig.clientSecret !== clientCredentials.clientSecret
+      ) {
+        return reply
+          .code(401)
+          .header("www-authenticate", 'Basic realm="token"')
+          .send({
+            error: "invalid_client",
+          });
+      }
+
+      // client_id isn't required if using Basic auth, but if they provide it
+      // then check it matches the authenticated client.
+      if (
+        request.body.client_id &&
+        request.body.client_id !== clientCredentials.clientId
+      ) {
+        return reply.code(401).send({
           error: "invalid_client",
         });
+      }
+    }
+    // No auth header, potentially a public client.
+    else {
+      const configuredClient = clientsConfig.find(function (client) {
+        return client.clientId === request.body.client_id;
+      });
+      if (
+        configuredClient == null ||
+        configuredClient.clientAuthMethod !== "none"
+      ) {
+        const invalidClientResponse = reply.code(401);
+        if (!request.body.client_id) {
+          invalidClientResponse.header(
+            "www-authenticate",
+            'Basic realm="token"',
+          );
+        }
+        return invalidClientResponse.send({
+          error: "invalid_client",
+        });
+      }
+
+      clientConfig = configuredClient;
     }
 
     // Switch on grant type.
