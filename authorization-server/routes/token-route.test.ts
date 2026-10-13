@@ -67,6 +67,55 @@ test("POST token endpoint rejects missing client auth", async function () {
   });
 });
 
+test("POST token endpoint accepts a public client_id in the request body", async function () {
+  const response = await fetchTokenEndpoint(
+    {
+      grant_type: "authorization_code",
+      client_id: "client-id-public",
+      code: "test-auth-code",
+    },
+    defaultServerConfig,
+    createAuthorizationCodeStoreWithCodeForClient("client-id-public"),
+  );
+
+  assert.equal(response.status, 200);
+});
+
+test("POST token endpoint rejects Basic authentication for a public client", async function () {
+  const response = await fetchTokenEndpoint(
+    {
+      grant_type: "authorization_code",
+      client_id: "client-id-public",
+      code: "test-auth-code",
+    },
+    defaultServerConfig,
+    createAuthorizationCodeStoreWithCodeForClient("client-id-public"),
+    createBasicAuthHeader("client-id-public", "unused-secret"),
+  );
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), {
+    error: "invalid_client",
+  });
+});
+
+test("POST token endpoint rejects body client_id authentication for a confidential client", async function () {
+  const response = await fetchTokenEndpoint(
+    {
+      grant_type: "authorization_code",
+      client_id: "client-id-opaque",
+      code: "test-auth-code",
+    },
+    defaultServerConfig,
+    createAuthorizationCodeStoreWithCode(),
+  );
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), {
+    error: "invalid_client",
+  });
+});
+
 test("POST token endpoint rejects invalid client auth", async function () {
   const response = await fetchTokenEndpoint(
     {

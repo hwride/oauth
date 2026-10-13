@@ -134,7 +134,7 @@ async function makeTokenRequest(args: {
   }
 
   args.log.info(
-    { url: tokenUrl, body: tokenRequestBody.toString() },
+    { url: tokenUrl, headers, body: tokenRequestBody.toString() },
     "/callback - Access Token Request",
   );
 
