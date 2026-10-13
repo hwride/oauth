@@ -25,6 +25,7 @@ export async function main() {
 
   try {
     await fastify.listen({
+      host: "0.0.0.0",
       port: getClientPort(),
     });
     fastify.log.info("Client is booted");

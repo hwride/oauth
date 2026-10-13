@@ -14,7 +14,7 @@ export async function authServerDiscovery(
   logger: FastifyBaseLogger,
 ): Promise<DiscoveryResult> {
   const oidcDiscoveryUrl = new URL(
-    "/.well-known/openid-configuration",
+    process.env.OPENID_CONFIG_PATH ?? "/.well-known/openid-configuration",
     authServerBase,
   );
   const oauthDiscoveryUrl = new URL(
