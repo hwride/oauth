@@ -4,6 +4,8 @@
 
 Some potential things that could be added to this auth server.
 
+- [ ] Add TOTP
+- [ ] Add DPoP
 - [ ] Tidy up tests
 - [ ] Add /userinfo support for opqaue access tokens
 - [ ] Support client_credentials grant (incl access tokens without a subject)
