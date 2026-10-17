@@ -14,3 +14,7 @@ Here are a list of some relevant OAuth specifications for this project.
 ## OpenID Connect
 - [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
 - [OpenID Connect Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html)
+
+## OTP
+- [HOTP: An HMAC-Based One-Time Password Algorithm](https://www.rfc-editor.org/info/rfc4226/) (2005-12)
+- [TOTP: Time-Based One-Time Password Algorithm](https://www.rfc-editor.org/info/rfc6238/) (2011-05)
