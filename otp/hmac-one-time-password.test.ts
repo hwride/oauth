@@ -32,7 +32,7 @@ test("spec tests - counter 0", async () => {
   );
 });
 
-test("spec tests - all counters", async () => {
+test("spec tests - all counters (6 digits)", async () => {
   assert.equal((await hmacOneTimePassword(specTestSecret, 0n)).code, "755224");
   assert.equal((await hmacOneTimePassword(specTestSecret, 1n)).code, "287082");
   assert.equal((await hmacOneTimePassword(specTestSecret, 2n)).code, "359152");
@@ -47,6 +47,44 @@ test("spec tests - all counters", async () => {
 
 test("codes are left padded if required", async () => {
   assert.equal((await hmacOneTimePassword(specTestSecret, 30n)).code, "026920");
+});
+
+test("codes > 6 digits", async () => {
+  assert.equal(
+    (await hmacOneTimePassword(specTestSecret, 0n, 7)).code,
+    "4755224",
+  );
+  assert.equal(
+    (await hmacOneTimePassword(specTestSecret, 1n, 8)).code,
+    "94287082",
+  );
+  assert.equal(
+    (await hmacOneTimePassword(specTestSecret, 1n, 9)).code,
+    "094287082",
+  );
+  assert.equal(
+    (await hmacOneTimePassword(specTestSecret, 2n, 10)).code,
+    "0137359152",
+  );
+});
+
+test("codes < 6 digits or > 10 digits is clamped", async () => {
+  assert.equal(
+    (await hmacOneTimePassword(specTestSecret, 0n, 1)).code,
+    "755224",
+  );
+  assert.equal(
+    (await hmacOneTimePassword(specTestSecret, 0n, 2)).code,
+    "755224",
+  );
+  assert.equal(
+    (await hmacOneTimePassword(specTestSecret, 0n, 15)).code,
+    "1284755224",
+  );
+  assert.equal(
+    (await hmacOneTimePassword(specTestSecret, 0n, 100)).code,
+    "1284755224",
+  );
 });
 
 test("keys that are < 16 bytes are rejected", async () => {
@@ -72,6 +110,16 @@ test("counters > 8 bytes are rejected", async () => {
     await hmacOneTimePassword(specTestSecret, 0xffff_ffff_ffff_ffff_ffffn);
   } catch (e) {
     assert.equal(e.message, "Counter is too long - it must fit in 8 bytes");
+    return;
+  }
+  assert.equal(true, false);
+});
+
+test("NaN digits is rejected", async () => {
+  try {
+    await hmacOneTimePassword(specTestSecret, 1n, NaN);
+  } catch (e) {
+    assert.equal(e.message, "Digits is not an integer");
     return;
   }
   assert.equal(true, false);

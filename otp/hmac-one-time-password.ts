@@ -1,6 +1,3 @@
-// Spec: Digit
-const codeDigits = 6;
-
 /**
  * Calculate a HMAC based One-Time Password.
  *
@@ -9,26 +6,29 @@ const codeDigits = 6;
  * @param key The key (secret) for the HMAC algorithm. K in the spec.
  * @param counter 8-byte counter value. C in the spec. We use bigint to avoid any floating point issues. HOTP spec
  * specifies 8 byte or 64 bit counters, and JavaScript numbers are only safe up to 53 bits (Number.MAX_SAFE_INTEGER).
+ * @param digitsGiven The length of the OTP. Clamped between 6 and 10.
  */
 export async function hmacOneTimePassword(
   key: ArrayBuffer,
   counter: bigint,
+  // Spec: Digit
+  digitsGiven = 6,
 ): Promise<{
   hmacResult: ArrayBuffer;
   dynamicTruncateResult: ArrayBuffer;
   dynamicTruncateResultDecimal: number;
   code: string;
 }> {
-  validateArgs(key, counter);
+  const { digits } = validateArgs(key, counter, digitsGiven);
 
   // HMAC-SHA-1 result is 20 bytes long. This will change when we later support other HMAC algorithms for TOTP.
   // Spec: HMAC-SHA-1(K, C)
   const hmacResult = await hmacSha1(key, counter);
 
   // Spec: Truncate(HMAC-SHA-1(K, C))
-  const truncateResult = truncate(hmacResult);
+  const truncateResult = truncate(hmacResult, digits);
 
-  const codePadded = String(truncateResult.code).padStart(codeDigits, "0");
+  const codePadded = String(truncateResult.code).padStart(digits, "0");
 
   return {
     hmacResult,
@@ -38,7 +38,11 @@ export async function hmacOneTimePassword(
   };
 }
 
-function validateArgs(key: ArrayBuffer, counter: bigint) {
+function validateArgs(
+  key: ArrayBuffer,
+  counter: bigint,
+  digits: number,
+): { digits: number } {
   // Check key is at least 128 bits / 16 bytes.
   if (key.byteLength < 16) {
     throw new Error("Key is not long enough - it must be at least 16 bytes");
@@ -49,6 +53,15 @@ function validateArgs(key: ArrayBuffer, counter: bigint) {
   if (counter < 0n || counter > maxCounter) {
     throw new Error("Counter is too long - it must fit in 8 bytes");
   }
+
+  if (!Number.isInteger(digits)) {
+    throw new Error("Digits is not an integer");
+  }
+
+  // If you use > 10 digits it's just 0 padded anyway, as the maximum
+  // 32-but unsigned int is 4294967295 which is 10 digits.
+  const digitsClamped = Math.min(10, Math.max(6, digits));
+  return { digits: digitsClamped };
 }
 
 async function hmacSha1(
@@ -76,23 +89,10 @@ async function hmacSha1(
   return mac;
 }
 
-// Left for interest, but replaced Node HMAC use with Web Crypto Standard use.
-// import { createHmac } from "node:crypto";
-// function hmacSha1Node(key: ArrayBuffer, counter: bigint): ArrayBuffer {
-//   // Convert our number to bytes.
-//   // Spec requires counter to be 8 bytes, so allocate an 8 byte buffer.
-//   const counterBytes = new ArrayBuffer(8);
-//
-//   // Key and counter should be hashed high-order byte first, this means big endian - BE.
-//   new DataView(counterBytes).setBigUint64(0, counter, false);
-//
-//   // Create the HMAC.
-//   return createHmac("sha1", new Uint8Array(key))
-//     .update(new Uint8Array(counterBytes))
-//     .digest().buffer;
-// }
-
-function truncate(hmacOutput: ArrayBuffer): {
+function truncate(
+  hmacOutput: ArrayBuffer,
+  digits: number,
+): {
   dynamicTruncateResult: ArrayBuffer;
   dynamicTruncateResultDecimal: number;
   code: number;
@@ -102,13 +102,15 @@ function truncate(hmacOutput: ArrayBuffer): {
   const dynamicTruncateResult = dynamicTruncation(hmacOutput);
 
   // Compute HOTP value.
-  // Specs: Let dynamicTruncateResultUint32 = StToNum(sBits)   // Convert S to a number in 0...2^{31}-1
+  // Spec: Let Snum = StToNum(sBits)   // Convert S to a number in 0...2^{31}-1
   const dynamicTruncateResultUint32 = new DataView(
     dynamicTruncateResult,
   ).getUint32(0, false);
 
-  // Spec: Return D = dynamicTruncateResultUint32 mod 10^Digit // D is a number in the range 0...10^{Digit}-1
-  const code = dynamicTruncateResultUint32 % 10 ** codeDigits;
+  // Spec: Return D = Snum mod 10^Digit // D is a number in the range 0...10^{Digit}-1
+  // % is technically signed remainder not mod, but they function they same when you know
+  // both the dividend (left value) is > -1 and the divisor (right value) is > 0.
+  const code = dynamicTruncateResultUint32 % 10 ** digits;
   return {
     dynamicTruncateResult,
     dynamicTruncateResultDecimal: dynamicTruncateResultUint32,
@@ -147,3 +149,19 @@ export function dynamicTruncation(buffer: ArrayBuffer): ArrayBuffer {
 
   return offsetMaskedBuffer;
 }
+
+// Left for interest, but replaced Node HMAC use with Web Crypto Standard use.
+// import { createHmac } from "node:crypto";
+// function hmacSha1Node(key: ArrayBuffer, counter: bigint): ArrayBuffer {
+//   // Convert our number to bytes.
+//   // Spec requires counter to be 8 bytes, so allocate an 8 byte buffer.
+//   const counterBytes = new ArrayBuffer(8);
+//
+//   // Key and counter should be hashed high-order byte first, this means big endian - BE.
+//   new DataView(counterBytes).setBigUint64(0, counter, false);
+//
+//   // Create the HMAC.
+//   return createHmac("sha1", new Uint8Array(key))
+//     .update(new Uint8Array(counterBytes))
+//     .digest().buffer;
+// }
