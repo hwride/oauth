@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dynamicTruncation, hotp } from "./hotp.ts";
+import {
+  dynamicTruncation,
+  hmacOneTimePassword,
+} from "./hmac-one-time-password.ts";
 import { hexToArrayBuffer, toHex } from "../util/binary.ts";
 
 const specTestSecret = hexToArrayBuffer(
@@ -9,7 +12,7 @@ const specTestSecret = hexToArrayBuffer(
 
 // Appendix D - HOTP Algorithm: Test Values - https://www.rfc-editor.org/info/rfc4226/#page-32
 test("spec tests - counter 0", async () => {
-  const counter0Result = await hotp(specTestSecret, 0n);
+  const counter0Result = await hmacOneTimePassword(specTestSecret, 0n);
   assert.deepEqual(
     {
       hmacResultHex: toHex(counter0Result.hmacResult, false),
@@ -30,20 +33,20 @@ test("spec tests - counter 0", async () => {
 });
 
 test("spec tests - all counters", async () => {
-  assert.equal((await hotp(specTestSecret, 0n)).code, "755224");
-  assert.equal((await hotp(specTestSecret, 1n)).code, "287082");
-  assert.equal((await hotp(specTestSecret, 2n)).code, "359152");
-  assert.equal((await hotp(specTestSecret, 3n)).code, "969429");
-  assert.equal((await hotp(specTestSecret, 4n)).code, "338314");
-  assert.equal((await hotp(specTestSecret, 5n)).code, "254676");
-  assert.equal((await hotp(specTestSecret, 6n)).code, "287922");
-  assert.equal((await hotp(specTestSecret, 7n)).code, "162583");
-  assert.equal((await hotp(specTestSecret, 8n)).code, "399871");
-  assert.equal((await hotp(specTestSecret, 9n)).code, "520489");
+  assert.equal((await hmacOneTimePassword(specTestSecret, 0n)).code, "755224");
+  assert.equal((await hmacOneTimePassword(specTestSecret, 1n)).code, "287082");
+  assert.equal((await hmacOneTimePassword(specTestSecret, 2n)).code, "359152");
+  assert.equal((await hmacOneTimePassword(specTestSecret, 3n)).code, "969429");
+  assert.equal((await hmacOneTimePassword(specTestSecret, 4n)).code, "338314");
+  assert.equal((await hmacOneTimePassword(specTestSecret, 5n)).code, "254676");
+  assert.equal((await hmacOneTimePassword(specTestSecret, 6n)).code, "287922");
+  assert.equal((await hmacOneTimePassword(specTestSecret, 7n)).code, "162583");
+  assert.equal((await hmacOneTimePassword(specTestSecret, 8n)).code, "399871");
+  assert.equal((await hmacOneTimePassword(specTestSecret, 9n)).code, "520489");
 });
 
 test("codes are left padded if required", async () => {
-  assert.equal((await hotp(specTestSecret, 30n)).code, "026920");
+  assert.equal((await hmacOneTimePassword(specTestSecret, 30n)).code, "026920");
 });
 
 test("keys that are < 16 bytes are rejected", async () => {
@@ -53,7 +56,7 @@ test("keys that are < 16 bytes are rejected", async () => {
     for (let i = 0; i < uint8Arr.length; i++) {
       uint8Arr[i] = 0xff;
     }
-    await hotp(uint8Arr.buffer, 5n);
+    await hmacOneTimePassword(uint8Arr.buffer, 5n);
   } catch (e) {
     assert.equal(
       e.message,
@@ -66,7 +69,7 @@ test("keys that are < 16 bytes are rejected", async () => {
 
 test("counters > 8 bytes are rejected", async () => {
   try {
-    await hotp(specTestSecret, 0xffff_ffff_ffff_ffff_ffffn);
+    await hmacOneTimePassword(specTestSecret, 0xffff_ffff_ffff_ffff_ffffn);
   } catch (e) {
     assert.equal(e.message, "Counter is too long - it must fit in 8 bytes");
     return;

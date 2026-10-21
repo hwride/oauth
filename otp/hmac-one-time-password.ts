@@ -10,7 +10,7 @@ const codeDigits = 6;
  * @param counter 8-byte counter value. C in the spec. We use bigint to avoid any floating point issues. HOTP spec
  * specifies 8 byte or 64 bit counters, and JavaScript numbers are only safe up to 53 bits (Number.MAX_SAFE_INTEGER).
  */
-export async function hotp(
+export async function hmacOneTimePassword(
   key: ArrayBuffer,
   counter: bigint,
 ): Promise<{
