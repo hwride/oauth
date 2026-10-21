@@ -12,8 +12,11 @@ test("spec tests - counter 0", async () => {
   const counter0Result = await hotp(specTestSecret, 0n);
   assert.deepEqual(
     {
-      hmacResultHex: toHex(counter0Result.hmacResult),
-      dynamicTruncateResultHex: toHex(counter0Result.dynamicTruncateResult),
+      hmacResultHex: toHex(counter0Result.hmacResult, false),
+      dynamicTruncateResultHex: toHex(
+        counter0Result.dynamicTruncateResult,
+        false,
+      ),
       dynamicTruncateResultDecimal: counter0Result.dynamicTruncateResultDecimal,
       code: counter0Result.code,
     },

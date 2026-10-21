@@ -1,14 +1,27 @@
 /**
+ * Convert an array buffer to a human-readable binary string.
+ *
+ * E.g. toHex(buffer) => '11111111'
+ */
+export function toBinary(buffer: ArrayBuffer, spaces = true) {
+  const byteStrings = [];
+  for (const byte of new Uint8Array(buffer)) {
+    byteStrings.push(byte.toString(2).padStart(8, "0"));
+  }
+  return byteStrings.join(spaces ? " " : "");
+}
+
+/**
  * Convert an array buffer to a human-readable hex string.
  *
- * E.g. toHex(buffer) => '12af3b'
+ * E.g. toHex(buffer) => '12 af 3b'
  */
-export function toHex(buffer: ArrayBuffer) {
-  let hexStr = "";
+export function toHex(buffer: ArrayBuffer, spaces = true) {
+  const byteStrings = [];
   for (const byte of new Uint8Array(buffer)) {
-    hexStr += byte.toString(16);
+    byteStrings.push(byte.toString(16).padStart(2, "0"));
   }
-  return hexStr;
+  return byteStrings.join(spaces ? " " : "");
 }
 
 /**
