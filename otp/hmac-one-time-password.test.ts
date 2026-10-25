@@ -91,7 +91,7 @@ test("codes > 6 digits", async () => {
       await hmacOneTimePassword({
         key: specTestSecret,
         counter: 0n,
-        digitsGiven: 7,
+        codeLength: 7,
       })
     ).code,
     "4755224",
@@ -101,7 +101,7 @@ test("codes > 6 digits", async () => {
       await hmacOneTimePassword({
         key: specTestSecret,
         counter: 1n,
-        digitsGiven: 8,
+        codeLength: 8,
       })
     ).code,
     "94287082",
@@ -111,7 +111,7 @@ test("codes > 6 digits", async () => {
       await hmacOneTimePassword({
         key: specTestSecret,
         counter: 1n,
-        digitsGiven: 9,
+        codeLength: 9,
       })
     ).code,
     "094287082",
@@ -121,7 +121,7 @@ test("codes > 6 digits", async () => {
       await hmacOneTimePassword({
         key: specTestSecret,
         counter: 2n,
-        digitsGiven: 10,
+        codeLength: 10,
       })
     ).code,
     "0137359152",
@@ -134,7 +134,7 @@ test("codes < 6 digits or > 10 digits is clamped", async () => {
       await hmacOneTimePassword({
         key: specTestSecret,
         counter: 0n,
-        digitsGiven: 1,
+        codeLength: 1,
       })
     ).code,
     "755224",
@@ -144,7 +144,7 @@ test("codes < 6 digits or > 10 digits is clamped", async () => {
       await hmacOneTimePassword({
         key: specTestSecret,
         counter: 0n,
-        digitsGiven: 2,
+        codeLength: 2,
       })
     ).code,
     "755224",
@@ -154,7 +154,7 @@ test("codes < 6 digits or > 10 digits is clamped", async () => {
       await hmacOneTimePassword({
         key: specTestSecret,
         counter: 0n,
-        digitsGiven: 15,
+        codeLength: 15,
       })
     ).code,
     "1284755224",
@@ -164,10 +164,79 @@ test("codes < 6 digits or > 10 digits is clamped", async () => {
       await hmacOneTimePassword({
         key: specTestSecret,
         counter: 0n,
-        digitsGiven: 100,
+        codeLength: 100,
       })
     ).code,
     "1284755224",
+  );
+});
+
+test("alphanumeric codes - 6 digits", async () => {
+  assert.equal(
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 0n,
+        codeType: "alphanumeric",
+      })
+    ).code,
+    "M6MTWE",
+  );
+  assert.equal(
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 1n,
+        codeType: "alphanumeric",
+      })
+    ).code,
+    "JBTHVP",
+  );
+  assert.equal(
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 2n,
+        codeType: "alphanumeric",
+      })
+    ).code,
+    "43HXWS",
+  );
+});
+
+test("alphanumeric codes with a length of < 4 or > 6 or clamped ", async () => {
+  assert.equal(
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 0n,
+        codeType: "alphanumeric",
+        codeLength: 1,
+      })
+    ).code,
+    "M6MT",
+  );
+  assert.equal(
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 0n,
+        codeType: "alphanumeric",
+        codeLength: 7,
+      })
+    ).code,
+    "M6MTWE",
+  );
+  assert.equal(
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 1n,
+        codeType: "alphanumeric",
+        codeLength: 10,
+      })
+    ).code,
+    "JBTHVP",
   );
 });
 
@@ -207,7 +276,7 @@ test("NaN digits is rejected", async () => {
     await hmacOneTimePassword({
       key: specTestSecret,
       counter: 1n,
-      digitsGiven: NaN,
+      codeLength: NaN,
     });
   } catch (e) {
     assert.equal(e.message, "Digits is not an integer");
