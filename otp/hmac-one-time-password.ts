@@ -1,3 +1,7 @@
+import { binaryToArrayBuffer, toBinary } from "../util/binary.ts";
+
+type CodeType = "numeric" | "alphanumeric";
+
 /**
  * Calculate a HMAC based One-Time Password.
  *
@@ -12,6 +16,7 @@ export async function hmacOneTimePassword(options: {
   key: ArrayBuffer;
   counter: bigint;
   digitsGiven?: number;
+  codeType?: CodeType;
 }): Promise<{
   hmacResult: ArrayBuffer;
   dynamicTruncateResult: ArrayBuffer;
@@ -23,6 +28,7 @@ export async function hmacOneTimePassword(options: {
     counter,
     // Spec: Digit
     digitsGiven = 6,
+    codeType = "numeric",
   } = options;
   const { digits } = validateArgs(key, counter, digitsGiven);
 
@@ -41,18 +47,45 @@ export async function hmacOneTimePassword(options: {
     dynamicTruncateResult,
   ).getUint32(0, false);
 
-  // Spec: Return D = Snum mod 10^Digit // D is a number in the range 0...10^{Digit}-1
-  // % is technically signed remainder not mod, but they function they same when you know
-  // both the dividend (left value) is > -1 and the divisor (right value) is > 0.
-  const code = dynamicTruncateResultUint32 % 10 ** digits;
+  let code: string;
+  // https://www.rfc-editor.org/info/rfc4226/#appendix-E.2
+  // Note the spec doesn't actually propose a way to implement this though.
+  if (codeType === "alphanumeric") {
+    code = "";
+    const binaryString = toBinary(dynamicTruncateResult);
+    const textDecoder = new TextDecoder();
+    for (let i = 0; i < binaryString.length; i += 5) {
+      const binaryStringPart = binaryString.slice(i, i + 5);
+      const partBuffer = binaryToArrayBuffer(binaryStringPart);
+      const partUint8 = new Uint8Array(partBuffer);
+      const partNumber = partUint8[0];
 
-  const codePadded = String(code).padStart(digits, "0");
+      // Ensure this parts number is a number of letter
+      // ASCII numbers  = 48-57 (9 values)
+      // ASCII uppercase alphabet = 65-90 (25 values)
+      // Total = 31 values
+      // Usefully 5 bits has a max value of 31, so we can simply use that value to select in the range.
+      const partNumberClamped =
+        partNumber < 9 ? 48 + partNumber : 65 + (partNumber - 9);
+      const partBufferClamped = new Uint8Array([partNumberClamped]);
+      const letter = textDecoder.decode(partBufferClamped);
+      code += letter;
+    }
+
+    code = code.slice(0, digits);
+  } else {
+    // Spec: Return D = Snum mod 10^Digit // D is a number in the range 0...10^{Digit}-1
+    // % is technically signed remainder not mod, but they function they same when you know
+    // both the dividend (left value) is > -1 and the divisor (right value) is > 0.
+    const codeNumericNotPadded = dynamicTruncateResultUint32 % 10 ** digits;
+    code = String(codeNumericNotPadded).padStart(digits, "0");
+  }
 
   return {
     hmacResult,
     dynamicTruncateResult,
     dynamicTruncateResultDecimal: dynamicTruncateResultUint32,
-    code: codePadded,
+    code,
   };
 }
 

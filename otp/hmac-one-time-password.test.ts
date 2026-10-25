@@ -171,6 +171,75 @@ test("codes < 6 digits or > 10 digits is clamped", async () => {
   );
 });
 
+test("alphanumeric codes - 6 digits", async () => {
+  assert.equal(
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 0n,
+        codeType: "alphanumeric",
+      })
+    ).code,
+    "AA4G78",
+  );
+  assert.equal(
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 1n,
+        codeType: "alphanumeric",
+      })
+    ).code,
+    "82F5W7",
+  );
+  assert.equal(
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 2n,
+        codeType: "alphanumeric",
+      })
+    ).code,
+    "10CGOA",
+  );
+});
+
+test("alphanumeric codes - 7 digits", async () => {
+  assert.equal(
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 0n,
+        codeType: "alphanumeric",
+        digitsGiven: 7,
+      })
+    ).code,
+    "AA4G78P",
+  );
+  assert.equal(
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 1n,
+        codeType: "alphanumeric",
+        digitsGiven: 7,
+      })
+    ).code,
+    "82F5W7B",
+  );
+  assert.equal(
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 2n,
+        codeType: "alphanumeric",
+        digitsGiven: 7,
+      })
+    ).code,
+    "10CGOAH",
+  );
+});
+
 test("keys that are < 16 bytes are rejected", async () => {
   try {
     const buffer = new ArrayBuffer(15);
