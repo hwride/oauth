@@ -12,7 +12,10 @@ const specTestSecret = hexToArrayBuffer(
 
 // Appendix D - HOTP Algorithm: Test Values - https://www.rfc-editor.org/info/rfc4226/#page-32
 test("spec tests - counter 0", async () => {
-  const counter0Result = await hmacOneTimePassword(specTestSecret, 0n);
+  const counter0Result = await hmacOneTimePassword({
+    key: specTestSecret,
+    counter: 0n,
+  });
   assert.deepEqual(
     {
       hmacResultHex: toHex(counter0Result.hmacResult, false),
@@ -33,56 +36,137 @@ test("spec tests - counter 0", async () => {
 });
 
 test("spec tests - all counters (6 digits)", async () => {
-  assert.equal((await hmacOneTimePassword(specTestSecret, 0n)).code, "755224");
-  assert.equal((await hmacOneTimePassword(specTestSecret, 1n)).code, "287082");
-  assert.equal((await hmacOneTimePassword(specTestSecret, 2n)).code, "359152");
-  assert.equal((await hmacOneTimePassword(specTestSecret, 3n)).code, "969429");
-  assert.equal((await hmacOneTimePassword(specTestSecret, 4n)).code, "338314");
-  assert.equal((await hmacOneTimePassword(specTestSecret, 5n)).code, "254676");
-  assert.equal((await hmacOneTimePassword(specTestSecret, 6n)).code, "287922");
-  assert.equal((await hmacOneTimePassword(specTestSecret, 7n)).code, "162583");
-  assert.equal((await hmacOneTimePassword(specTestSecret, 8n)).code, "399871");
-  assert.equal((await hmacOneTimePassword(specTestSecret, 9n)).code, "520489");
+  assert.equal(
+    (await hmacOneTimePassword({ key: specTestSecret, counter: 0n })).code,
+    "755224",
+  );
+  assert.equal(
+    (await hmacOneTimePassword({ key: specTestSecret, counter: 1n })).code,
+    "287082",
+  );
+  assert.equal(
+    (await hmacOneTimePassword({ key: specTestSecret, counter: 2n })).code,
+    "359152",
+  );
+  assert.equal(
+    (await hmacOneTimePassword({ key: specTestSecret, counter: 3n })).code,
+    "969429",
+  );
+  assert.equal(
+    (await hmacOneTimePassword({ key: specTestSecret, counter: 4n })).code,
+    "338314",
+  );
+  assert.equal(
+    (await hmacOneTimePassword({ key: specTestSecret, counter: 5n })).code,
+    "254676",
+  );
+  assert.equal(
+    (await hmacOneTimePassword({ key: specTestSecret, counter: 6n })).code,
+    "287922",
+  );
+  assert.equal(
+    (await hmacOneTimePassword({ key: specTestSecret, counter: 7n })).code,
+    "162583",
+  );
+  assert.equal(
+    (await hmacOneTimePassword({ key: specTestSecret, counter: 8n })).code,
+    "399871",
+  );
+  assert.equal(
+    (await hmacOneTimePassword({ key: specTestSecret, counter: 9n })).code,
+    "520489",
+  );
 });
 
 test("codes are left padded if required", async () => {
-  assert.equal((await hmacOneTimePassword(specTestSecret, 30n)).code, "026920");
+  assert.equal(
+    (await hmacOneTimePassword({ key: specTestSecret, counter: 30n })).code,
+    "026920",
+  );
 });
 
 test("codes > 6 digits", async () => {
   assert.equal(
-    (await hmacOneTimePassword(specTestSecret, 0n, 7)).code,
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 0n,
+        digitsGiven: 7,
+      })
+    ).code,
     "4755224",
   );
   assert.equal(
-    (await hmacOneTimePassword(specTestSecret, 1n, 8)).code,
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 1n,
+        digitsGiven: 8,
+      })
+    ).code,
     "94287082",
   );
   assert.equal(
-    (await hmacOneTimePassword(specTestSecret, 1n, 9)).code,
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 1n,
+        digitsGiven: 9,
+      })
+    ).code,
     "094287082",
   );
   assert.equal(
-    (await hmacOneTimePassword(specTestSecret, 2n, 10)).code,
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 2n,
+        digitsGiven: 10,
+      })
+    ).code,
     "0137359152",
   );
 });
 
 test("codes < 6 digits or > 10 digits is clamped", async () => {
   assert.equal(
-    (await hmacOneTimePassword(specTestSecret, 0n, 1)).code,
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 0n,
+        digitsGiven: 1,
+      })
+    ).code,
     "755224",
   );
   assert.equal(
-    (await hmacOneTimePassword(specTestSecret, 0n, 2)).code,
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 0n,
+        digitsGiven: 2,
+      })
+    ).code,
     "755224",
   );
   assert.equal(
-    (await hmacOneTimePassword(specTestSecret, 0n, 15)).code,
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 0n,
+        digitsGiven: 15,
+      })
+    ).code,
     "1284755224",
   );
   assert.equal(
-    (await hmacOneTimePassword(specTestSecret, 0n, 100)).code,
+    (
+      await hmacOneTimePassword({
+        key: specTestSecret,
+        counter: 0n,
+        digitsGiven: 100,
+      })
+    ).code,
     "1284755224",
   );
 });
@@ -94,7 +178,7 @@ test("keys that are < 16 bytes are rejected", async () => {
     for (let i = 0; i < uint8Arr.length; i++) {
       uint8Arr[i] = 0xff;
     }
-    await hmacOneTimePassword(uint8Arr.buffer, 5n);
+    await hmacOneTimePassword({ key: uint8Arr.buffer, counter: 5n });
   } catch (e) {
     assert.equal(
       e.message,
@@ -107,7 +191,10 @@ test("keys that are < 16 bytes are rejected", async () => {
 
 test("counters > 8 bytes are rejected", async () => {
   try {
-    await hmacOneTimePassword(specTestSecret, 0xffff_ffff_ffff_ffff_ffffn);
+    await hmacOneTimePassword({
+      key: specTestSecret,
+      counter: 0xffff_ffff_ffff_ffff_ffffn,
+    });
   } catch (e) {
     assert.equal(e.message, "Counter is too long - it must fit in 8 bytes");
     return;
@@ -117,7 +204,11 @@ test("counters > 8 bytes are rejected", async () => {
 
 test("NaN digits is rejected", async () => {
   try {
-    await hmacOneTimePassword(specTestSecret, 1n, NaN);
+    await hmacOneTimePassword({
+      key: specTestSecret,
+      counter: 1n,
+      digitsGiven: NaN,
+    });
   } catch (e) {
     assert.equal(e.message, "Digits is not an integer");
     return;

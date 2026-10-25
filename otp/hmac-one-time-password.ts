@@ -3,22 +3,27 @@
  *
  * https://www.rfc-editor.org/info/rfc4226
  *
- * @param key The key (secret) for the HMAC algorithm. K in the spec.
- * @param counter 8-byte counter value. C in the spec. We use bigint to avoid any floating point issues. HOTP spec
+ * @param options.key - The key (secret) for the HMAC algorithm. K in the spec.
+ * @param options.counter - 8-byte counter value. C in the spec. We use bigint to avoid any floating point issues. HOTP spec
  * specifies 8 byte or 64 bit counters, and JavaScript numbers are only safe up to 53 bits (Number.MAX_SAFE_INTEGER).
- * @param digitsGiven The length of the OTP. Clamped between 6 and 10.
+ * @param options.digitsGiven - The length of the OTP. Clamped between 6 and 10.
  */
-export async function hmacOneTimePassword(
-  key: ArrayBuffer,
-  counter: bigint,
-  // Spec: Digit
-  digitsGiven = 6,
-): Promise<{
+export async function hmacOneTimePassword(options: {
+  key: ArrayBuffer;
+  counter: bigint;
+  digitsGiven?: number;
+}): Promise<{
   hmacResult: ArrayBuffer;
   dynamicTruncateResult: ArrayBuffer;
   dynamicTruncateResultDecimal: number;
   code: string;
 }> {
+  const {
+    key,
+    counter,
+    // Spec: Digit
+    digitsGiven = 6,
+  } = options;
   const { digits } = validateArgs(key, counter, digitsGiven);
 
   // HMAC-SHA-1 result is 20 bytes long. This will change when we later support other HMAC algorithms for TOTP.
