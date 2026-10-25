@@ -31,14 +31,27 @@ export async function hmacOneTimePassword(options: {
   const hmacResult = await hmacSha1(key, counter);
 
   // Spec: Truncate(HMAC-SHA-1(K, C))
-  const truncateResult = truncate(hmacResult, digits);
+  // Dynamic truncation.
+  // Spec: Let Sbits = DT(HS)   //  DT, defined below, returns a 31-bit string
+  const dynamicTruncateResult = dynamicTruncation(hmacResult);
 
-  const codePadded = String(truncateResult.code).padStart(digits, "0");
+  // Compute HOTP value.
+  // Spec: Let Snum = StToNum(sBits)   // Convert S to a number in 0...2^{31}-1
+  const dynamicTruncateResultUint32 = new DataView(
+    dynamicTruncateResult,
+  ).getUint32(0, false);
+
+  // Spec: Return D = Snum mod 10^Digit // D is a number in the range 0...10^{Digit}-1
+  // % is technically signed remainder not mod, but they function they same when you know
+  // both the dividend (left value) is > -1 and the divisor (right value) is > 0.
+  const code = dynamicTruncateResultUint32 % 10 ** digits;
+
+  const codePadded = String(code).padStart(digits, "0");
 
   return {
     hmacResult,
-    dynamicTruncateResult: truncateResult.dynamicTruncateResult,
-    dynamicTruncateResultDecimal: truncateResult.dynamicTruncateResultDecimal,
+    dynamicTruncateResult,
+    dynamicTruncateResultDecimal: dynamicTruncateResultUint32,
     code: codePadded,
   };
 }
@@ -92,35 +105,6 @@ async function hmacSha1(
 
   const mac = await crypto.subtle.sign("HMAC", key, counterBuffer);
   return mac;
-}
-
-function truncate(
-  hmacOutput: ArrayBuffer,
-  digits: number,
-): {
-  dynamicTruncateResult: ArrayBuffer;
-  dynamicTruncateResultDecimal: number;
-  code: number;
-} {
-  // Dynamic truncation.
-  // Spec: Let Sbits = DT(HS)   //  DT, defined below, returns a 31-bit string
-  const dynamicTruncateResult = dynamicTruncation(hmacOutput);
-
-  // Compute HOTP value.
-  // Spec: Let Snum = StToNum(sBits)   // Convert S to a number in 0...2^{31}-1
-  const dynamicTruncateResultUint32 = new DataView(
-    dynamicTruncateResult,
-  ).getUint32(0, false);
-
-  // Spec: Return D = Snum mod 10^Digit // D is a number in the range 0...10^{Digit}-1
-  // % is technically signed remainder not mod, but they function they same when you know
-  // both the dividend (left value) is > -1 and the divisor (right value) is > 0.
-  const code = dynamicTruncateResultUint32 % 10 ** digits;
-  return {
-    dynamicTruncateResult,
-    dynamicTruncateResultDecimal: dynamicTruncateResultUint32,
-    code,
-  };
 }
 
 // Truncate a 20-byte sequence into a dynamic 4-byte binary code.
