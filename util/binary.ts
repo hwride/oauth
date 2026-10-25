@@ -45,7 +45,7 @@ export function toHex(buffer: ArrayBuffer, spaces = true) {
  */
 export function binaryToArrayBuffer(binary: string): ArrayBuffer {
   if (!/^[01\s]+$/i.test(binary)) {
-    throw new Error("Hex string must contain binary digits");
+    throw new Error("Binary string must contain binary digits");
   }
 
   const binaryStripped = binary.replace(/\s+/g, "");
