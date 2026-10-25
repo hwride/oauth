@@ -1,5 +1,11 @@
 import { binaryToArrayBuffer, toBinary } from "../util/binary.ts";
 
+type HotpOptions = {
+  key: ArrayBuffer;
+  counter: bigint;
+  codeLength?: number;
+  codeType?: CodeType;
+};
 type CodeType = "numeric" | "alphanumeric";
 
 /**
@@ -8,29 +14,19 @@ type CodeType = "numeric" | "alphanumeric";
  * https://www.rfc-editor.org/info/rfc4226
  *
  * @param options.key - The key (secret) for the HMAC algorithm. K in the spec.
- * @param options.counter - 8-byte counter value. C in the spec. We use bigint to avoid any floating point issues. HOTP spec
- * specifies 8 byte or 64 bit counters, and JavaScript numbers are only safe up to 53 bits (Number.MAX_SAFE_INTEGER).
- * @param options.digitsGiven - The length of the OTP. Clamped between 6 and 10.
+ * @param options.counter - 8-byte counter value. C in the spec. We use bigint to avoid any floating point issues.
+ * HOTP spec specifies 8 byte or 64 bit counters, and JavaScript numbers are only safe up to 53 bits (Number.MAX_SAFE_INTEGER).
+ * @param options.codeType - Whether to generate a number or alphanumeric OTP.
+ * @param options.codeLength - The length of the OTP. Clamped between 6 and 10 for numeric codes,
+ * and between 4 and 6 for alphanumeric codes.
  */
-export async function hmacOneTimePassword(options: {
-  key: ArrayBuffer;
-  counter: bigint;
-  digitsGiven?: number;
-  codeType?: CodeType;
-}): Promise<{
+export async function hmacOneTimePassword(options: HotpOptions): Promise<{
   hmacResult: ArrayBuffer;
   dynamicTruncateResult: ArrayBuffer;
   dynamicTruncateResultDecimal: number;
   code: string;
 }> {
-  const {
-    key,
-    counter,
-    // Spec: Digit
-    digitsGiven = 6,
-    codeType = "numeric",
-  } = options;
-  const { digits } = validateArgs(key, counter, digitsGiven);
+  const { key, counter, codeType, codeLength } = validateArgs(options);
 
   // HMAC-SHA-1 result is 20 bytes long. This will change when we later support other HMAC algorithms for TOTP.
   // Spec: HMAC-SHA-1(K, C)
@@ -51,34 +47,9 @@ export async function hmacOneTimePassword(options: {
   // https://www.rfc-editor.org/info/rfc4226/#appendix-E.2
   // Note the spec doesn't actually propose a way to implement this though.
   if (codeType === "alphanumeric") {
-    code = "";
-    const binaryString = toBinary(dynamicTruncateResult);
-    const textDecoder = new TextDecoder();
-    for (let i = 0; i < binaryString.length; i += 5) {
-      const binaryStringPart = binaryString.slice(i, i + 5);
-      const partBuffer = binaryToArrayBuffer(binaryStringPart);
-      const partUint8 = new Uint8Array(partBuffer);
-      const partNumber = partUint8[0];
-
-      // Ensure this parts number is a number of letter
-      // ASCII numbers  = 48-57 (9 values)
-      // ASCII uppercase alphabet = 65-90 (25 values)
-      // Total = 31 values
-      // Usefully 5 bits has a max value of 31, so we can simply use that value to select in the range.
-      const partNumberClamped =
-        partNumber < 9 ? 48 + partNumber : 65 + (partNumber - 9);
-      const partBufferClamped = new Uint8Array([partNumberClamped]);
-      const letter = textDecoder.decode(partBufferClamped);
-      code += letter;
-    }
-
-    code = code.slice(0, digits);
+    code = generateAlphanumericCode(dynamicTruncateResult, codeLength);
   } else {
-    // Spec: Return D = Snum mod 10^Digit // D is a number in the range 0...10^{Digit}-1
-    // % is technically signed remainder not mod, but they function they same when you know
-    // both the dividend (left value) is > -1 and the divisor (right value) is > 0.
-    const codeNumericNotPadded = dynamicTruncateResultUint32 % 10 ** digits;
-    code = String(codeNumericNotPadded).padStart(digits, "0");
+    code = generateNumericCode(dynamicTruncateResultUint32, codeLength);
   }
 
   return {
@@ -89,30 +60,104 @@ export async function hmacOneTimePassword(options: {
   };
 }
 
-function validateArgs(
-  key: ArrayBuffer,
-  counter: bigint,
-  digits: number,
-): { digits: number } {
+function generateAlphanumericCode(
+  dynamicTruncateResult: ArrayBuffer,
+  codeLength: number,
+): string {
+  // Our dynamicTruncateResult is 32-bits
+  // ASCII numbers = 48-57, excluding 0 and 1 (8 values)
+  // ASCII uppercase alphabet = 65-90, excluding I and O (24 values)
+  // Total = 32 values
+  // The total number of values that can be represented by 5 bits is 32 (0-31)
+  // This means we can take 5-bit chunks from our 31 meaningful bits and get a code up to 6 characters long.
+  let code = "";
+  // We slice the first bit as it's always 0 so not providing randomness, because it was masked off.
+  // This leaves us with 31 meaningful bits.
+  // But because we're doing 5-bit chunks for 6 letters, we only use 30 of those bits (6 * 5 = 30).
+  const binaryString = toBinary(dynamicTruncateResult, false).slice(1);
+  const textDecoder = new TextDecoder();
+
+  // Generate a list of valid ASCII codes.
+  // We exclude potentially confusing codes - 0, 1, I, O
+  // Chose to exclude codes so we leave a total of 32 characters in the remaining set, matching spec suggestion.
+  const excludedAsciiCodes = [48, 49, 73, 79];
+  const validAsciiCodes = [];
+  for (let asciiCode = 48; asciiCode <= 57; asciiCode++) {
+    if (!excludedAsciiCodes.includes(asciiCode)) {
+      validAsciiCodes.push(asciiCode);
+    }
+  }
+  for (let asciiCode = 65; asciiCode <= 90; asciiCode++) {
+    if (!excludedAsciiCodes.includes(asciiCode)) {
+      validAsciiCodes.push(asciiCode);
+    }
+  }
+
+  for (let i = 0; i < codeLength; i += 1) {
+    const binaryStringPart = binaryString.slice(i * 5, i * 5 + 5);
+    const partBuffer = binaryToArrayBuffer(binaryStringPart);
+    const partUint8 = new Uint8Array(partBuffer);
+    const partNumber = partUint8[0];
+    const asciiCode = validAsciiCodes[partNumber % validAsciiCodes.length];
+    const partBufferClamped = new Uint8Array([asciiCode]);
+    const letter = textDecoder.decode(partBufferClamped);
+    code += letter;
+  }
+
+  return code.slice(0, codeLength);
+}
+
+function generateNumericCode(
+  dynamicTruncateResultUint32: number,
+  codeLength: number,
+): string {
+  // Spec: Return D = Snum mod 10^Digit // D is a number in the range 0...10^{Digit}-1
+  // % is technically signed remainder not mod, but they function they same when you know
+  // both the dividend (left value) is > -1 and the divisor (right value) is > 0.
+  const codeNumericNotPadded = dynamicTruncateResultUint32 % 10 ** codeLength;
+  return String(codeNumericNotPadded).padStart(codeLength, "0");
+}
+
+function validateArgs(options: HotpOptions): Required<HotpOptions> {
+  const validatedOptions: Required<HotpOptions> = {
+    ...options,
+    codeLength: options.codeLength ?? 6,
+    codeType: options.codeType ?? "numeric",
+  };
+
   // Check key is at least 128 bits / 16 bytes.
-  if (key.byteLength < 16) {
+  if (options.key.byteLength < 16) {
     throw new Error("Key is not long enough - it must be at least 16 bytes");
   }
 
   // Check counter fits in 64 bits.
   const maxCounter = 0xffff_ffff_ffff_ffffn; // Max 8 byte value
-  if (counter < 0n || counter > maxCounter) {
+  if (options.counter < 0n || options.counter > maxCounter) {
     throw new Error("Counter is too long - it must fit in 8 bytes");
   }
 
-  if (!Number.isInteger(digits)) {
+  // Check digits.
+  if (!Number.isInteger(validatedOptions.codeLength)) {
     throw new Error("Digits is not an integer");
   }
 
   // If you use > 10 digits it's just 0 padded anyway, as the maximum
-  // 32-but unsigned int is 4294967295 which is 10 digits.
-  const digitsClamped = Math.min(10, Math.max(6, digits));
-  return { digits: digitsClamped };
+  // 32-bit unsigned int is 4294967295 which is 10 digits.
+  if (validatedOptions.codeType === "numeric") {
+    validatedOptions.codeLength = Math.min(
+      10,
+      Math.max(6, validatedOptions.codeLength),
+    );
+  }
+  // codeType - alphanumeric
+  else {
+    validatedOptions.codeLength = Math.min(
+      6,
+      Math.max(4, validatedOptions.codeLength),
+    );
+  }
+
+  return validatedOptions;
 }
 
 async function hmacSha1(
