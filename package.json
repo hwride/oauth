@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "node scripts/dev.ts",
+    "test": "node --test otp/*.test.ts util/*.test.ts",
     "types": "tsc --noEmit",
     "prettier:write": "prettier --write ."
   },
