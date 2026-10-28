@@ -101,7 +101,7 @@ export function createTimeBasedOneTimePasswordValidator(
   return {
     validate: async (
       expectedCode: string,
-      { time }: Pick<TotpOptionsCode, "time">,
+      { time }: Pick<TotpOptionsCode, "time"> = {},
     ): Promise<{ isValid: boolean }> => {
       time ??= new Date();
       const baseUnixTime = toUnixTime(time);
@@ -135,11 +135,9 @@ export function createTimeBasedOneTimePasswordValidator(
           continue;
         }
 
-        // Check if code is valid.
-        if (code === expectedCode) {
-          await codeStore.save(codeStoreCode);
-          return { isValid: true };
-        }
+        // Code is valid.
+        await codeStore.save(codeStoreCode);
+        return { isValid: true };
       }
 
       return { isValid: false };

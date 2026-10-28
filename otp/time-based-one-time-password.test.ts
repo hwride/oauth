@@ -27,7 +27,7 @@ const knownCodes = Object.freeze({
   h12m00s30: "480583",
 });
 
-test("timeBasedOneTimePassword - defaults", async () => {
+test("timeBasedOneTimePassword -  basic check", async () => {
   const totpValidator = createTimeBasedOneTimePasswordValidator({
     key: testSecret,
   });
@@ -42,6 +42,14 @@ test("timeBasedOneTimePassword - defaults", async () => {
     time,
   });
   assert.strictEqual(code2Result.isValid, false);
+});
+
+test("timeBasedOneTimePassword - validate works without options", async () => {
+  const totpValidator = createTimeBasedOneTimePasswordValidator({
+    key: testSecret,
+  });
+  const code1Result = await totpValidator.validate("472600");
+  assert.strictEqual(typeof code1Result.isValid, "boolean");
 });
 
 test("timeBasedOneTimePassword - validation", async () => {
