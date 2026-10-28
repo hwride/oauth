@@ -133,6 +133,44 @@ test("timeBasedOneTimePassword - cannot re-use code", async () => {
   assert.strictEqual(codeReuseResult.isValid, false);
 });
 
+test("timeBasedOneTimePassword - cannot re-use code - but two steps generate the same code", async () => {
+  // Look first, here's proof we can generate the same code across two time steps.
+  const time = new Date("1970-11-13T05:29:00.000Z");
+  const timePrevStep = new Date("1970-11-13T05:28:30.000Z");
+  const first = await timeBasedOneTimePasswordCode({
+    key: testSecret,
+    time,
+  });
+  const second = await timeBasedOneTimePasswordCode({
+    key: testSecret,
+    time: timePrevStep,
+  });
+  assert.equal(first.code, "911617");
+  assert.equal(second.code, "911617");
+
+  // Now we assert that we allow each code once. Because it could be the case you enter once code, the time step ticks
+  // over, then if we simply blocked the same code being used twice they could not enter the second code.
+  const totpValidator = createTimeBasedOneTimePasswordValidator({
+    key: testSecret,
+    allowedTimeSteps: 2,
+  });
+  // Check the code works the first time, this claims 05:28:30 code
+  assert.strictEqual(
+    (await totpValidator.validate("911617", { time })).isValid,
+    true,
+  );
+  // Check the code works again, this claims 05:29:00 code
+  assert.strictEqual(
+    (await totpValidator.validate("911617", { time })).isValid,
+    true,
+  );
+  // Check the code does not work a 3rd time, as both time step versions of the code have been claimed.
+  assert.strictEqual(
+    (await totpValidator.validate("911617", { time })).isValid,
+    false,
+  );
+});
+
 test("timeBasedOneTimePasswordCode - numeric", async () => {
   // 11:59:00
   const { code: code1 } = await timeBasedOneTimePasswordCode({

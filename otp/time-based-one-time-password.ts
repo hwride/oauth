@@ -107,10 +107,6 @@ export function createTimeBasedOneTimePasswordValidator(
         time?: Date;
       } = {},
     ): Promise<{ isValid: boolean }> => {
-      if (await codeStore.has(expectedCode)) {
-        return { isValid: false };
-      }
-
       time ??= new Date();
 
       // Loop through all the allowed time steps starting from time, until we find a matching code or we fail to match.
@@ -124,17 +120,29 @@ export function createTimeBasedOneTimePasswordValidator(
         const baseUnixTime = toUnixTime(time);
         const stepUnixTime =
           baseUnixTime + optionsValidator.timeStep * timeStep;
-        const stepTime = fromUnixTime(stepUnixTime);
+        const stepUnixTimeDate = fromUnixTime(stepUnixTime);
 
         // Get the code for this step.
         const { code } = await timeBasedOneTimePasswordCode({
           ...optionsValidator,
-          time: stepTime,
+          time: stepUnixTimeDate,
         });
+
+        // Check if we already used this code for this time step.
+        // Make sure we save a combination of step time + code, in case two time values happen to generate the same code
+        // we don't want to block use for the other time value.
+        const stepTime = calculateTime(stepUnixTime, optionsValidator.timeStep);
+        const codeStoreCode = `${stepTime}:${expectedCode}`;
+        const codeStoreHasCode = await codeStore.has(codeStoreCode);
+
+        // Didn't match or already used, try next step.
+        if (code !== expectedCode || codeStoreHasCode) {
+          continue;
+        }
 
         // Check if code is valid.
         if (code === expectedCode) {
-          await codeStore.save(expectedCode);
+          await codeStore.save(codeStoreCode);
           return { isValid: true };
         }
       }
