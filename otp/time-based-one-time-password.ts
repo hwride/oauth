@@ -22,26 +22,41 @@ export type TotpOptionsValidator = TotpOptionsShared & {
   allowedTimeSteps?: number;
   /**
    * Ability to set a custom store for storing used codes. This is needed to prevent code re-use.
-   * By default uses an in-memory store - not suitable for production use as this will lose all data on service restart.
+   *
+   * By default uses an in-memory store - not suitable for production use as this will lose all data on service restart
+   * and will not normalise code storage across > 1 process.
    */
   customCodeStoreCreator?: CodeStoreCreator;
 };
 
-type CodeStoreCreator = (
+/**
+ * Validator which takes an expected TOTP code and checks if it's valid. Works according to {@see TotpOptionsValidator}
+ * config.
+ */
+export type TotpValidator = {
+  validate: (
+    expectedCode: string,
+    { time }?: Pick<TotpOptionsCode, "time">,
+  ) => Promise<{ isValid: boolean }>;
+};
+
+export type CodeStoreCreator = (
   /**
    * You can use allowed time steps to perform clearing of entries that are no longer valid. You never need to store
    * more codes than the number of allowed time steps. But ensure you remove oldest codes first.
    */
   options: Required<Pick<TotpOptionsValidator, "allowedTimeSteps">>,
 ) => CodeStore;
-type CodeStore = {
-  /** Save a code that has been used. */
-  save: (code: string) => Promise<void>;
-  /** Return whether this code has been used before. */
-  has: (code: string) => Promise<boolean>;
+export type CodeStore = {
+  /**
+   * Check if a code has been used. Return duplicate if it has been used already, or accepted if it's new.
+   * If accepted should store the code for the next check. This should all be performed as an atomic operation to
+   * ensure concurrent use behaves correctly.
+   */
+  check: (code: string) => Promise<"duplicate" | "accepted">;
 };
 
-type TotpOptionsCode = TotpOptionsShared & {
+export type TotpOptionsCode = TotpOptionsShared & {
   /** Optional time value to generate the code. Defaults to current time. */
   time?: Date;
 };
@@ -55,23 +70,28 @@ const createMemoryCodeStore: CodeStoreCreator = (options) => {
   const usedCodes = [];
 
   return {
-    async save(code) {
-      usedCodes.unshift(code);
+    async check(code) {
+      if (usedCodes.includes(code)) {
+        return "duplicate";
+      } else {
+        usedCodes.unshift(code);
 
-      // Remove codes that could never be valid anymore anyway as we're passed that time.
-      while (usedCodes.length > options.allowedTimeSteps) {
-        usedCodes.shift();
+        // Remove codes that could never be valid anymore anyway as we're passed that time.
+        while (usedCodes.length > options.allowedTimeSteps) {
+          usedCodes.shift();
+        }
+        return "accepted";
       }
-    },
-    async has(code) {
-      return usedCodes.includes(code);
     },
   };
 };
 
+/**
+ * Creates a Time-Base One-Time Password validator.
+ */
 export function createTimeBasedOneTimePasswordValidator(
   options: TotpOptionsValidator,
-) {
+): TotpValidator {
   // Defaults
   const allowedTimeSteps = options.allowedTimeSteps ?? defaultAllowedTimeSteps;
   const optionsGenCode: TotpOptionsCode = {
@@ -98,10 +118,10 @@ export function createTimeBasedOneTimePasswordValidator(
     allowedTimeSteps,
   });
 
-  return {
+  const totpValidator: TotpValidator = {
     validate: async (
-      expectedCode: string,
-      { time }: Pick<TotpOptionsCode, "time"> = {},
+      expectedCode,
+      { time } = {},
     ): Promise<{ isValid: boolean }> => {
       time ??= new Date();
       const baseUnixTime = toUnixTime(time);
@@ -120,29 +140,32 @@ export function createTimeBasedOneTimePasswordValidator(
           time: stepUnixTimeDate,
         });
 
-        // Check if we already used this code for this time step.
+        // Didn't match, try next step.
+        if (code !== expectedCode) {
+          continue;
+        }
+
+        // Did match, check this code isn't being re-used.
         // Make sure we save a combination of step time + code, in case two time values happen to generate the same code
         // we don't want to block use for the other time value.
-        const numTimeSteps = calculateNumberOfTimeSteps(
+        const timeStepNum = calculateTimeStepNumber(
           stepUnixTime,
           optionsGenCode.timeStepSeconds,
         );
-        const codeStoreCode = `${numTimeSteps}:${expectedCode}`;
-        const codeStoreHasCode = await codeStore.has(codeStoreCode);
-
-        // Didn't match or already used, try next step.
-        if (code !== expectedCode || codeStoreHasCode) {
+        const codeStoreCode = `${timeStepNum}:${code}`;
+        const codeStoreCheckResult = await codeStore.check(codeStoreCode);
+        if (codeStoreCheckResult === "duplicate") {
           continue;
         }
 
         // Code is valid.
-        await codeStore.save(codeStoreCode);
         return { isValid: true };
       }
 
       return { isValid: false };
     },
   };
+  return totpValidator;
 }
 
 /**
@@ -162,11 +185,11 @@ export async function timeBasedOneTimePasswordCode(
 
   const date = options.time ?? new Date();
   const unixTime = toUnixTime(date);
-  const numTimeSteps = calculateNumberOfTimeSteps(unixTime, timeStepSeconds);
+  const timeStepNum = calculateTimeStepNumber(unixTime, timeStepSeconds);
 
   const hmacResults = await hmacOneTimePassword({
     ...options,
-    counter: BigInt(numTimeSteps),
+    counter: BigInt(timeStepNum),
   });
 
   return { code: hmacResults.code };
@@ -179,7 +202,7 @@ export async function timeBasedOneTimePasswordCode(
  * @param unixTime The unix time (in seconds) to generate a code for.
  * @param timeStepSeconds The time step length in seconds.
  */
-export function calculateNumberOfTimeSteps(
+export function calculateTimeStepNumber(
   unixTime: number,
   timeStepSeconds: number,
 ) {

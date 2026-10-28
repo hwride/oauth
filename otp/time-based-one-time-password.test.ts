@@ -6,7 +6,7 @@ import {
 } from "./hmac-one-time-password.ts";
 import { hexToArrayBuffer, toHex } from "../util/binary.ts";
 import {
-  calculateNumberOfTimeSteps,
+  calculateTimeStepNumber,
   timeBasedOneTimePasswordCode,
   createTimeBasedOneTimePasswordValidator,
   type TotpOptionsValidator,
@@ -317,10 +317,10 @@ test("timeBasedOneTimePasswordCode - validation", async () => {
   );
 });
 
-test("calculateNumberOfTimeSteps", () => {
-  assert.strictEqual(calculateNumberOfTimeSteps(0, 30), 0);
-  assert.strictEqual(calculateNumberOfTimeSteps(29, 30), 0);
-  assert.strictEqual(calculateNumberOfTimeSteps(30, 30), 1);
-  assert.strictEqual(calculateNumberOfTimeSteps(59, 30), 1);
-  assert.strictEqual(calculateNumberOfTimeSteps(60, 30), 2);
+test("calculateTimeStepNumber", () => {
+  assert.strictEqual(calculateTimeStepNumber(0, 30), 0);
+  assert.strictEqual(calculateTimeStepNumber(29, 30), 0);
+  assert.strictEqual(calculateTimeStepNumber(30, 30), 1);
+  assert.strictEqual(calculateTimeStepNumber(59, 30), 1);
+  assert.strictEqual(calculateTimeStepNumber(60, 30), 2);
 });
