@@ -8,81 +8,171 @@ import { hexToArrayBuffer, toHex } from "../util/binary.ts";
 import {
   calculateTime,
   timeBasedOneTimePasswordCode,
-  timeBasedOneTimePassword,
+  createTimeBasedOneTimePasswordValidator,
+  type TotpOptionsValidator,
 } from "./time-based-one-time-password.ts";
 
-// Uses the same secret as the HMAC spec/tests.
+/** Uses the same secret as the HMAC spec/tests. */
 const testSecret = hexToArrayBuffer("3132333435363738393031323334353637383930");
+/** Constant value for use in tests for consistent code checks. */
+const testTime = new Date("2026-10-27T12:00:00.000Z");
+
+/**
+ * Known codes for the test secret and default code config. You can check the in the numeric test.
+ */
+const knownCodes = Object.freeze({
+  h11m59s00: "480534",
+  h11m59s30: "586766",
+  h12m00s00: "472600",
+  h12m00s30: "480583",
+});
 
 test("timeBasedOneTimePassword - defaults", async () => {
-  const time = new Date("2026-10-27T12:00:00.000Z");
-  const code1Result = await timeBasedOneTimePassword({
+  const totpValidator = createTimeBasedOneTimePasswordValidator({
     key: testSecret,
-    time: new Date("2026-10-27T12:00:00.000Z"),
-    expectedCode: "472600",
+  });
+  const time = testTime;
+  const code1Result = await totpValidator.validate("472600", {
+    time: testTime,
   });
   assert.strictEqual(code1Result.isValid, true);
-  assert.strictEqual(code1Result.matchingCode, "472600");
 
   // Prove it doesn't work with the next code.
-  const code2Result = await timeBasedOneTimePassword({
-    key: testSecret,
+  const code2Result = await totpValidator.validate("480583", {
     time,
-    allowedTimeSteps: 1,
-    expectedCode: "480583",
   });
   assert.strictEqual(code2Result.isValid, false);
 });
 
+test("timeBasedOneTimePassword - validation", async () => {
+  const expectError = (
+    options: Partial<TotpOptionsValidator>,
+    errorMsg: string,
+  ) => {
+    try {
+      const totpValidator = createTimeBasedOneTimePasswordValidator({
+        key: testSecret,
+        ...options,
+      });
+    } catch (e) {
+      assert.equal(e.message, errorMsg);
+      return;
+    }
+    assert.equal(true, false);
+  };
+
+  // timeStep
+  expectError(
+    { timeStep: Infinity },
+    "Invalid value for timeStep, must be > 0",
+  );
+  expectError({ timeStep: 0 }, "Invalid value for timeStep, must be > 0");
+  expectError({ timeStep: -1 }, "Invalid value for timeStep, must be > 0");
+
+  // allowedTimeSteps
+  expectError(
+    { allowedTimeSteps: Infinity },
+    "Invalid value for allowedTimeSteps, must be > 0",
+  );
+  expectError(
+    { allowedTimeSteps: 0 },
+    "Invalid value for allowedTimeSteps, must be > 0",
+  );
+  expectError(
+    { allowedTimeSteps: -1 },
+    "Invalid value for allowedTimeSteps, must be > 0",
+  );
+});
+
 test("timeBasedOneTimePassword - 2 allowed time steps", async () => {
-  const time = new Date("2026-10-27T12:00:00.000Z");
-  const code1Result = await timeBasedOneTimePassword({
+  const totpValidator = createTimeBasedOneTimePasswordValidator({
     key: testSecret,
-    time,
     allowedTimeSteps: 2,
-    expectedCode: "472600",
+  });
+  const time = testTime;
+
+  assert.strictEqual(
+    (await totpValidator.validate(knownCodes.h12m00s00, { time })).isValid,
+    true,
+    "Code for 12:00:00 - should work",
+  );
+
+  assert.strictEqual(
+    (await totpValidator.validate(knownCodes.h11m59s30, { time })).isValid,
+    true,
+    "Code for 11:59:30 - should work as it's 1 time step behind",
+  );
+
+  assert.strictEqual(
+    (await totpValidator.validate(knownCodes.h11m59s00, { time })).isValid,
+    false,
+    "Code for 11:59:00 - should not work as it's 2 time steps behind",
+  );
+
+  assert.strictEqual(
+    (await totpValidator.validate(knownCodes.h12m00s30, { time })).isValid,
+    false,
+    "Code for 12:00:30 - should not work as it's 1 time step ahead",
+  );
+});
+
+test("timeBasedOneTimePassword - cannot re-use code", async () => {
+  const totpValidator = createTimeBasedOneTimePasswordValidator({
+    key: testSecret,
+  });
+  const time = testTime;
+  const code1Result = await totpValidator.validate("472600", {
+    time: testTime,
   });
   assert.strictEqual(code1Result.isValid, true);
-  assert.strictEqual(code1Result.matchingCode, "472600");
 
-  // See the same code for the next time step is also valid due to 2 allowed time steps.
-  const code2Result = await timeBasedOneTimePassword({
-    key: testSecret,
+  // Prove it doesn't work with the next code.
+  const codeReuseResult = await totpValidator.validate("472600", {
     time,
-    allowedTimeSteps: 2,
-    expectedCode: "480583",
   });
-  assert.strictEqual(code2Result.isValid, true);
-  assert.strictEqual(code2Result.matchingCode, "480583");
-
-  // Proved it doesn't work when allowed time steps is 1.
-  const code3Result = await timeBasedOneTimePassword({
-    key: testSecret,
-    time,
-    allowedTimeSteps: 1,
-    expectedCode: "480583",
-  });
-  assert.strictEqual(code3Result.isValid, false);
+  assert.strictEqual(codeReuseResult.isValid, false);
 });
 
-test("numeric", async () => {
-  const { code } = await timeBasedOneTimePasswordCode({
+test("timeBasedOneTimePasswordCode - numeric", async () => {
+  // 11:59:00
+  const { code: code1 } = await timeBasedOneTimePasswordCode({
     key: testSecret,
-    time: new Date("2026-10-27T12:00:00.000Z"),
+    time: new Date("2026-10-27T11:59:00.000Z"),
   });
-  assert.strictEqual(code, "472600");
+  assert.strictEqual(code1, knownCodes.h11m59s00);
+
+  // 11:59:30
+  const { code: code2 } = await timeBasedOneTimePasswordCode({
+    key: testSecret,
+    time: new Date("2026-10-27T11:59:30.000Z"),
+  });
+  assert.strictEqual(code2, knownCodes.h11m59s30);
+
+  // 12:00:00
+  const { code: code3 } = await timeBasedOneTimePasswordCode({
+    key: testSecret,
+    time: testTime,
+  });
+  assert.strictEqual(code3, knownCodes.h12m00s00);
+
+  // 12:30:00
+  const { code: code4 } = await timeBasedOneTimePasswordCode({
+    key: testSecret,
+    time: new Date("2026-10-27T12:00:30.000Z"),
+  });
+  assert.strictEqual(code4, knownCodes.h12m00s30);
 });
 
-test("alphanumeric", async () => {
+test("timeBasedOneTimePasswordCode - alphanumeric", async () => {
   const { code } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     codeType: "alphanumeric",
-    time: new Date("2026-10-27T12:00:00.000Z"),
+    time: testTime,
   });
   assert.strictEqual(code, "2MSUBE");
 });
 
-test("defaults to current time if not provided", async () => {
+test("timeBasedOneTimePasswordCode - defaults to current time if not provided", async () => {
   const { code } = await timeBasedOneTimePasswordCode({
     key: testSecret,
   });
@@ -92,7 +182,7 @@ test("defaults to current time if not provided", async () => {
 
 // Spec: The implementation of this algorithm MUST support a time value T
 // larger than a 32-bit integer when it is beyond the year 2038.
-test("time beyond 2038", async () => {
+test("timeBasedOneTimePasswordCode - time beyond 2038", async () => {
   const { code } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time: new Date("2040-10-27T12:00:00.000Z"),
@@ -100,7 +190,7 @@ test("time beyond 2038", async () => {
   assert.strictEqual(code, "713614");
 });
 
-test("two codes within the same time step are the same", async () => {
+test("timeBasedOneTimePasswordCode - two codes within the same time step are the same", async () => {
   const { code: code0 } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time: new Date(0),
@@ -117,7 +207,7 @@ test("two codes within the same time step are the same", async () => {
   assert.notStrictEqual(code29, code30); // Next time step so should not match
 });
 
-test("can set custom time step", async () => {
+test("timeBasedOneTimePasswordCode - can set custom time step", async () => {
   const { code: code0 } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time: new Date(0),
