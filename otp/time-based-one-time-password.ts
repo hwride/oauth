@@ -162,8 +162,12 @@ export async function timeBasedOneTimePasswordCode(
 ): Promise<{
   code: string;
 }> {
-  const date = options.time ?? new Date();
   const timeStep = options.timeStep ?? defaultTimeStepSeconds;
+  if (!Number.isInteger(timeStep) || timeStep < 1) {
+    throw new Error("Invalid value for timeStep, must be > 0");
+  }
+
+  const date = options.time ?? new Date();
   const unixTime = toUnixTime(date);
   const time = calculateTime(unixTime, timeStep);
 

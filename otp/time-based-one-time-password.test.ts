@@ -50,7 +50,7 @@ test("timeBasedOneTimePassword - validation", async () => {
     errorMsg: string,
   ) => {
     try {
-      const totpValidator = createTimeBasedOneTimePasswordValidator({
+      createTimeBasedOneTimePasswordValidator({
         key: testSecret,
         ...options,
       });
@@ -269,6 +269,35 @@ test("timeBasedOneTimePasswordCode - can set custom time step", async () => {
   assert.strictEqual(code0, code29); // Same time step so should be equal
   assert.strictEqual(code0, code30); // Same time step so should be equal
   assert.notStrictEqual(code0, code61); // Next time step so should not match
+});
+
+test("timeBasedOneTimePasswordCode - validation", async () => {
+  const expectError = async (
+    options: Partial<TotpOptionsValidator>,
+    errorMsg: string,
+  ) => {
+    try {
+      await timeBasedOneTimePasswordCode({
+        key: testSecret,
+        ...options,
+      });
+    } catch (e) {
+      assert.equal(e.message, errorMsg);
+      return;
+    }
+    assert.equal(true, false);
+  };
+
+  // timeStep
+  await expectError(
+    { timeStep: Infinity },
+    "Invalid value for timeStep, must be > 0",
+  );
+  await expectError({ timeStep: 0 }, "Invalid value for timeStep, must be > 0");
+  await expectError(
+    { timeStep: -1 },
+    "Invalid value for timeStep, must be > 0",
+  );
 });
 
 test("calculateTime", () => {
