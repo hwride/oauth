@@ -12,14 +12,17 @@ export type HotpOptions = {
   codeLength?: number;
   /** Whether to generate a number or alphanumeric OTP. */
   codeType?: CodeType;
+  /** What hash algorithm to use. */
+  hashAlgorithm?: HashAlgorithm;
 };
+export const supportedHashAlgorithms = ["SHA-1", "SHA-256", "SHA-512"] as const;
+export type HashAlgorithm = (typeof supportedHashAlgorithms)[number];
 export type CodeType = "numeric" | "alphanumeric";
 
 /**
  * Calculate a HMAC based One-Time Password.
  *
  * https://www.rfc-editor.org/info/rfc4226
- *
  */
 export async function hmacOneTimePassword(options: HotpOptions): Promise<{
   hmacResult: ArrayBuffer;
@@ -27,16 +30,17 @@ export async function hmacOneTimePassword(options: HotpOptions): Promise<{
   dynamicTruncateResultDecimal: number;
   code: string;
 }> {
-  const { key, counter, codeType, codeLength } = validateArgs(options);
+  const { key, counter, codeType, codeLength, hashAlgorithm } =
+    validateArgs(options);
 
-  // HMAC-SHA-1 result is 20 bytes long. This will change when we later support other HMAC algorithms for TOTP.
+  // Depending on the hash algorithm this buffer will be different lengths.
   // Spec: HMAC-SHA-1(K, C)
-  const hmacResult = await hmacSha1(key, counter);
+  const macBuffer = await hmac(key, counter, hashAlgorithm);
 
   // Spec: Truncate(HMAC-SHA-1(K, C))
   // Dynamic truncation.
   // Spec: Let Sbits = DT(HS)   //  DT, defined below, returns a 31-bit string
-  const dynamicTruncateResult = dynamicTruncation(hmacResult);
+  const dynamicTruncateResult = dynamicTruncation(macBuffer);
 
   // Compute HOTP value.
   // Spec: Let Snum = StToNum(sBits)   // Convert S to a number in 0...2^{31}-1
@@ -54,7 +58,7 @@ export async function hmacOneTimePassword(options: HotpOptions): Promise<{
   }
 
   return {
-    hmacResult,
+    hmacResult: macBuffer,
     dynamicTruncateResult,
     dynamicTruncateResultDecimal: dynamicTruncateResultUint32,
     code,
@@ -124,6 +128,7 @@ function validateArgs(options: HotpOptions): Required<HotpOptions> {
     ...options,
     codeLength: options.codeLength ?? 6,
     codeType: options.codeType ?? "numeric",
+    hashAlgorithm: options.hashAlgorithm ?? "SHA-1",
   };
 
   // Check key is at least 128 bits / 16 bytes.
@@ -158,19 +163,27 @@ function validateArgs(options: HotpOptions): Required<HotpOptions> {
     );
   }
 
+  // Check hash algorithm.
+  if (!supportedHashAlgorithms.includes(validatedOptions.hashAlgorithm)) {
+    throw new Error(
+      `Unsupported hash algorithm. Supported: ${supportedHashAlgorithms}`,
+    );
+  }
+
   return validatedOptions;
 }
 
-async function hmacSha1(
+async function hmac(
   keyBytes: ArrayBuffer,
   counter: bigint,
+  hash: HashAlgorithm,
 ): Promise<ArrayBuffer> {
   const key = await crypto.subtle.importKey(
     "raw",
     keyBytes,
     {
       name: "HMAC",
-      hash: "SHA-1",
+      hash,
     },
     false,
     ["sign"],
@@ -186,17 +199,13 @@ async function hmacSha1(
   return mac;
 }
 
-// Truncate a 20-byte sequence into a dynamic 4-byte binary code.
+/**
+ * Truncate our HMAC result into a dynamic 4-byte binary code.
+ */
 export function dynamicTruncation(buffer: ArrayBuffer): ArrayBuffer {
-  if (buffer.byteLength !== 20) {
-    throw new Error(
-      `Expected a buffer with 20 bytes, received one with ${buffer.byteLength} bytes`,
-    );
-  }
-
   // Spec: Let OffsetBits be the low-order 4 bits of the final byte
   const uint8Buffer = new Uint8Array(buffer);
-  const finalByte = uint8Buffer[19];
+  const finalByte = uint8Buffer[buffer.byteLength - 1];
   // Get the low-order 4 bits and convert them to a number (JS does this automatically after the bitwise op).
   // We know this won't leave to negative numbers because the sign bit will always be 0.
   // We also know offset must be 0 <= offset <= 15 as it's only 4 bits wide.

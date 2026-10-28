@@ -1,6 +1,8 @@
 import {
   type CodeType,
+  type HashAlgorithm,
   hmacOneTimePassword,
+  supportedHashAlgorithms,
 } from "./hmac-one-time-password.ts";
 
 type TotpOptionsShared = {
@@ -15,6 +17,8 @@ type TotpOptionsShared = {
    * and between 4 and 6 for alphanumeric codes.
    */
   codeLength?: number;
+  /** Default to SHA-512 if unspecified. */
+  hashAlgorithm?: HashAlgorithm;
 };
 
 export type TotpOptionsValidator = TotpOptionsShared & {
@@ -122,6 +126,14 @@ export function createTimeBasedOneTimePasswordValidator(
     throw new Error("Invalid value for allowedTimeSteps, must be > 0");
   }
 
+  // Check hash algorithm.
+  optionsGenCode.hashAlgorithm ??= "SHA-512";
+  if (!supportedHashAlgorithms.includes(optionsGenCode.hashAlgorithm)) {
+    throw new Error(
+      `Unsupported hash algorithm. Supported: ${supportedHashAlgorithms}`,
+    );
+  }
+
   // Create the code store.
   const codeStoreCreator =
     options.customCodeStoreCreator ?? createMemoryCodeStore;
@@ -203,6 +215,7 @@ export async function timeBasedOneTimePasswordCode(
 
   const hmacResults = await hmacOneTimePassword({
     ...options,
+    hashAlgorithm: options.hashAlgorithm ?? "SHA-512",
     counter: BigInt(timeStepNum),
   });
 

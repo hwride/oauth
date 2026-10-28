@@ -4,11 +4,10 @@ import {
   dynamicTruncation,
   hmacOneTimePassword,
 } from "./hmac-one-time-password.ts";
-import { hexToArrayBuffer, toHex } from "../util/binary.ts";
+import { toHex } from "../util/binary.ts";
 
-const specTestSecret = hexToArrayBuffer(
-  "3132333435363738393031323334353637383930",
-);
+const textEncoder = new TextEncoder();
+const specTestSecret = textEncoder.encode("12345678901234567890").buffer;
 
 // Appendix D - HOTP Algorithm: Test Values - https://www.rfc-editor.org/info/rfc4226/#page-32
 test("spec tests - counter 0", async () => {
@@ -202,6 +201,101 @@ test("alphanumeric codes - 6 digits", async () => {
     ).code,
     "43HXWS",
   );
+});
+
+const totpSpecTestSecrets = Object.freeze({
+  sha1: specTestSecret,
+  sha256: textEncoder.encode("12345678901234567890123456789012").buffer,
+  sha512: textEncoder.encode(
+    "1234567890123456789012345678901234567890123456789012345678901234",
+  ).buffer,
+});
+
+const totpSpecTestValues = [
+  {
+    counter: 0x0000000000000001n,
+    sha1: "94287082",
+    sha256: "46119246",
+    sha512: "90693936",
+  },
+  {
+    counter: 0x00000000023523ecn,
+    sha1: "07081804",
+    sha256: "68084774",
+    sha512: "25091201",
+  },
+  {
+    counter: 0x00000000023523edn,
+    sha1: "14050471",
+    sha256: "67062674",
+    sha512: "99943326",
+  },
+  {
+    counter: 0x000000000273ef07n,
+    sha1: "89005924",
+    sha256: "91819424",
+    sha512: "93441116",
+  },
+  {
+    counter: 0x0000000003f940aan,
+    sha1: "69279037",
+    sha256: "90698825",
+    sha512: "38618901",
+  },
+  {
+    counter: 0x0000000027bc86aan,
+    sha1: "65353130",
+    sha256: "77737706",
+    sha512: "47863826",
+  },
+] as const;
+
+test("TOTP (RFC 6238) spec tests - SHA-1", async () => {
+  for (const testValue of totpSpecTestValues) {
+    assert.equal(
+      (
+        await hmacOneTimePassword({
+          key: totpSpecTestSecrets.sha1,
+          counter: testValue.counter,
+          codeLength: 8,
+          hashAlgorithm: "SHA-1",
+        })
+      ).code,
+      testValue.sha1,
+    );
+  }
+});
+
+test("TOTP (RFC 6238) spec tests - SHA-256", async () => {
+  for (const testValue of totpSpecTestValues) {
+    assert.equal(
+      (
+        await hmacOneTimePassword({
+          key: totpSpecTestSecrets.sha256,
+          counter: testValue.counter,
+          codeLength: 8,
+          hashAlgorithm: "SHA-256",
+        })
+      ).code,
+      testValue.sha256,
+    );
+  }
+});
+
+test("TOTP (RFC 6238) spec tests - SHA-512", async () => {
+  for (const testValue of totpSpecTestValues) {
+    assert.equal(
+      (
+        await hmacOneTimePassword({
+          key: totpSpecTestSecrets.sha512,
+          counter: testValue.counter,
+          codeLength: 8,
+          hashAlgorithm: "SHA-512",
+        })
+      ).code,
+      testValue.sha512,
+    );
+  }
 });
 
 test("alphanumeric codes with a length of < 4 or > 6 or clamped ", async () => {
