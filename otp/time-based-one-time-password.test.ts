@@ -6,7 +6,7 @@ import {
 } from "./hmac-one-time-password.ts";
 import { hexToArrayBuffer, toHex } from "../util/binary.ts";
 import {
-  calculateTime,
+  calculateNumberOfTimeSteps,
   timeBasedOneTimePasswordCode,
   createTimeBasedOneTimePasswordValidator,
   type TotpOptionsValidator,
@@ -61,13 +61,19 @@ test("timeBasedOneTimePassword - validation", async () => {
     assert.equal(true, false);
   };
 
-  // timeStep
+  // timeStepSeconds
   expectError(
-    { timeStep: Infinity },
-    "Invalid value for timeStep, must be > 0",
+    { timeStepSeconds: Infinity },
+    "Invalid value for timeStepSeconds, must be > 0",
   );
-  expectError({ timeStep: 0 }, "Invalid value for timeStep, must be > 0");
-  expectError({ timeStep: -1 }, "Invalid value for timeStep, must be > 0");
+  expectError(
+    { timeStepSeconds: 0 },
+    "Invalid value for timeStepSeconds, must be > 0",
+  );
+  expectError(
+    { timeStepSeconds: -1 },
+    "Invalid value for timeStepSeconds, must be > 0",
+  );
 
   // allowedTimeSteps
   expectError(
@@ -249,22 +255,22 @@ test("timeBasedOneTimePasswordCode - can set custom time step", async () => {
   const { code: code0 } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time: new Date(0),
-    timeStep: 60,
+    timeStepSeconds: 60,
   });
   const { code: code29 } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time: new Date(29 * 1000), // 29 seconds
-    timeStep: 60,
+    timeStepSeconds: 60,
   });
   const { code: code30 } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time: new Date(30 * 1000), // 30 seconds
-    timeStep: 60,
+    timeStepSeconds: 60,
   });
   const { code: code61 } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time: new Date(60 * 1000), // 61 seconds
-    timeStep: 60,
+    timeStepSeconds: 60,
   });
   assert.strictEqual(code0, code29); // Same time step so should be equal
   assert.strictEqual(code0, code30); // Same time step so should be equal
@@ -288,22 +294,25 @@ test("timeBasedOneTimePasswordCode - validation", async () => {
     assert.equal(true, false);
   };
 
-  // timeStep
+  // timeStepSeconds
   await expectError(
-    { timeStep: Infinity },
-    "Invalid value for timeStep, must be > 0",
+    { timeStepSeconds: Infinity },
+    "Invalid value for timeStepSeconds, must be > 0",
   );
-  await expectError({ timeStep: 0 }, "Invalid value for timeStep, must be > 0");
   await expectError(
-    { timeStep: -1 },
-    "Invalid value for timeStep, must be > 0",
+    { timeStepSeconds: 0 },
+    "Invalid value for timeStepSeconds, must be > 0",
+  );
+  await expectError(
+    { timeStepSeconds: -1 },
+    "Invalid value for timeStepSeconds, must be > 0",
   );
 });
 
-test("calculateTime", () => {
-  assert.strictEqual(calculateTime(0, 30), 0);
-  assert.strictEqual(calculateTime(29, 30), 0);
-  assert.strictEqual(calculateTime(30, 30), 1);
-  assert.strictEqual(calculateTime(59, 30), 1);
-  assert.strictEqual(calculateTime(60, 30), 2);
+test("calculateNumberOfTimeSteps", () => {
+  assert.strictEqual(calculateNumberOfTimeSteps(0, 30), 0);
+  assert.strictEqual(calculateNumberOfTimeSteps(29, 30), 0);
+  assert.strictEqual(calculateNumberOfTimeSteps(30, 30), 1);
+  assert.strictEqual(calculateNumberOfTimeSteps(59, 30), 1);
+  assert.strictEqual(calculateNumberOfTimeSteps(60, 30), 2);
 });

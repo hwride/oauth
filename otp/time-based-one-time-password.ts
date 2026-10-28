@@ -7,7 +7,7 @@ type TotpOptionsShared = {
   /** The key (secret) for the HMAC algorithm. */
   key: ArrayBuffer;
   /** Optional time step value in seconds. Defaults to 30s. */
-  timeStep?: number;
+  timeStepSeconds?: number;
   /** Whether to generate a number or alphanumeric OTP. */
   codeType?: CodeType;
   /**
@@ -20,7 +20,10 @@ type TotpOptionsShared = {
 export type TotpOptionsValidator = TotpOptionsShared & {
   /** How many time steps to consider valid. It considers steps in the past valid, not in the future. Defaults to 1. */
   allowedTimeSteps?: number;
-  /** Ability to set a custom store for storing used codes. This is needed to prevent code re-use. */
+  /**
+   * Ability to set a custom store for storing used codes. This is needed to prevent code re-use.
+   * By default uses an in-memory store - not suitable for production use as this will lose all data on service restart.
+   */
   customCodeStoreCreator?: CodeStoreCreator;
 };
 
@@ -69,70 +72,62 @@ const createMemoryCodeStore: CodeStoreCreator = (options) => {
 export function createTimeBasedOneTimePasswordValidator(
   options: TotpOptionsValidator,
 ) {
-  const optionsValidator = {
+  // Defaults
+  const allowedTimeSteps = options.allowedTimeSteps ?? defaultAllowedTimeSteps;
+  const optionsGenCode: TotpOptionsCode = {
     ...options,
-    timeStep: options.timeStep ?? defaultTimeStepSeconds,
-    allowedTimeSteps: options.allowedTimeSteps ?? defaultAllowedTimeSteps,
-    customCodeStoreCreator:
-      options.customCodeStoreCreator ?? createMemoryCodeStore,
+    timeStepSeconds: options.timeStepSeconds ?? defaultTimeStepSeconds,
   };
 
+  // Validation.
   if (
-    !Number.isInteger(optionsValidator.timeStep) ||
-    optionsValidator.timeStep < 1
+    !Number.isInteger(optionsGenCode.timeStepSeconds) ||
+    optionsGenCode.timeStepSeconds < 1
   ) {
-    throw new Error("Invalid value for timeStep, must be > 0");
+    throw new Error("Invalid value for timeStepSeconds, must be > 0");
   }
 
-  if (
-    !Number.isInteger(optionsValidator.allowedTimeSteps) ||
-    optionsValidator.allowedTimeSteps < 1
-  ) {
+  if (!Number.isInteger(allowedTimeSteps) || allowedTimeSteps < 1) {
     throw new Error("Invalid value for allowedTimeSteps, must be > 0");
   }
 
+  // Create the code store.
   const codeStoreCreator =
     options.customCodeStoreCreator ?? createMemoryCodeStore;
   const codeStore = codeStoreCreator({
-    allowedTimeSteps: optionsValidator.allowedTimeSteps,
+    allowedTimeSteps,
   });
 
   return {
     validate: async (
       expectedCode: string,
-      {
-        time,
-      }: {
-        /** Optional time value to generate the code. Defaults to current time. */
-        time?: Date;
-      } = {},
+      { time }: Pick<TotpOptionsCode, "time">,
     ): Promise<{ isValid: boolean }> => {
       time ??= new Date();
+      const baseUnixTime = toUnixTime(time);
 
       // Loop through all the allowed time steps starting from time, until we find a matching code or we fail to match.
-      for (
-        let timeStep = -optionsValidator.allowedTimeSteps + 1;
-        timeStep <= 0;
-        timeStep += 1
-      ) {
+      for (let timeStep = -allowedTimeSteps + 1; timeStep <= 0; timeStep += 1) {
         // Calculate time for this step.
         // Do calculation in Unix time to avoid any DST weirdness using Date.setSeconds
-        const baseUnixTime = toUnixTime(time);
         const stepUnixTime =
-          baseUnixTime + optionsValidator.timeStep * timeStep;
+          baseUnixTime + optionsGenCode.timeStepSeconds * timeStep;
         const stepUnixTimeDate = fromUnixTime(stepUnixTime);
 
         // Get the code for this step.
         const { code } = await timeBasedOneTimePasswordCode({
-          ...optionsValidator,
+          ...optionsGenCode,
           time: stepUnixTimeDate,
         });
 
         // Check if we already used this code for this time step.
         // Make sure we save a combination of step time + code, in case two time values happen to generate the same code
         // we don't want to block use for the other time value.
-        const stepTime = calculateTime(stepUnixTime, optionsValidator.timeStep);
-        const codeStoreCode = `${stepTime}:${expectedCode}`;
+        const numTimeSteps = calculateNumberOfTimeSteps(
+          stepUnixTime,
+          optionsGenCode.timeStepSeconds,
+        );
+        const codeStoreCode = `${numTimeSteps}:${expectedCode}`;
         const codeStoreHasCode = await codeStore.has(codeStoreCode);
 
         // Didn't match or already used, try next step.
@@ -162,31 +157,34 @@ export async function timeBasedOneTimePasswordCode(
 ): Promise<{
   code: string;
 }> {
-  const timeStep = options.timeStep ?? defaultTimeStepSeconds;
-  if (!Number.isInteger(timeStep) || timeStep < 1) {
-    throw new Error("Invalid value for timeStep, must be > 0");
+  const timeStepSeconds = options.timeStepSeconds ?? defaultTimeStepSeconds;
+  if (!Number.isInteger(timeStepSeconds) || timeStepSeconds < 1) {
+    throw new Error("Invalid value for timeStepSeconds, must be > 0");
   }
 
   const date = options.time ?? new Date();
   const unixTime = toUnixTime(date);
-  const time = calculateTime(unixTime, timeStep);
+  const numTimeSteps = calculateNumberOfTimeSteps(unixTime, timeStepSeconds);
 
   const hmacResults = await hmacOneTimePassword({
     ...options,
-    counter: BigInt(time),
+    counter: BigInt(numTimeSteps),
   });
 
   return { code: hmacResults.code };
 }
 
 /**
- * Calculate the time value from unix time and time step value.
+ * Calculate the number of time steps since t0.
  *
  * See https://www.rfc-editor.org/info/rfc6238/#section-4.2
  * @param unixTime The unix time (in seconds) to generate a code for.
  * @param timeStepSeconds The time step length in seconds.
  */
-export function calculateTime(unixTime: number, timeStepSeconds: number) {
+export function calculateNumberOfTimeSteps(
+  unixTime: number,
+  timeStepSeconds: number,
+) {
   const t0 = 0;
   const secondsFromT0 = unixTime - t0;
   return Math.floor(secondsFromT0 / timeStepSeconds);
