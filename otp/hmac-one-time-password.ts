@@ -1,24 +1,25 @@
 import { binaryToArrayBuffer, toBinary } from "../util/binary.ts";
 
-type HotpOptions = {
+export type HotpOptions = {
+  /** The key (secret) for the HMAC algorithm. K in the spec. */
   key: ArrayBuffer;
+  /**
+   * 8-byte counter value. C in the spec. We use bigint to avoid any floating point issues.
+   * HOTP spec specifies 8 byte or 64 bit counters, and JavaScript numbers are only safe up to 53 bits (Number.MAX_SAFE_INTEGER).
+   */
   counter: bigint;
+  /** The length of the OTP. Clamped between 6 and 10 for numeric codes, and between 4 and 6 for alphanumeric codes. */
   codeLength?: number;
+  /** Whether to generate a number or alphanumeric OTP. */
   codeType?: CodeType;
 };
-type CodeType = "numeric" | "alphanumeric";
+export type CodeType = "numeric" | "alphanumeric";
 
 /**
  * Calculate a HMAC based One-Time Password.
  *
  * https://www.rfc-editor.org/info/rfc4226
  *
- * @param options.key - The key (secret) for the HMAC algorithm. K in the spec.
- * @param options.counter - 8-byte counter value. C in the spec. We use bigint to avoid any floating point issues.
- * HOTP spec specifies 8 byte or 64 bit counters, and JavaScript numbers are only safe up to 53 bits (Number.MAX_SAFE_INTEGER).
- * @param options.codeType - Whether to generate a number or alphanumeric OTP.
- * @param options.codeLength - The length of the OTP. Clamped between 6 and 10 for numeric codes,
- * and between 4 and 6 for alphanumeric codes.
  */
 export async function hmacOneTimePassword(options: HotpOptions): Promise<{
   hmacResult: ArrayBuffer;
