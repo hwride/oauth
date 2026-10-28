@@ -49,11 +49,20 @@ export type CodeStoreCreator = (
 ) => CodeStore;
 export type CodeStore = {
   /**
-   * Check if a code has been used. Return duplicate if it has been used already, or accepted if it's new.
+   * Check if a key has been used. Return duplicate if it has been used already, or accepted if it's new.
    * If accepted should store the code for the next check. This should all be performed as an atomic operation to
    * ensure concurrent use behaves correctly.
    */
-  check: (code: string) => Promise<"duplicate" | "accepted">;
+  check: (opts: {
+    /**
+     * Key to store in the cache. Technically: <time-step-number>:<totp-code>
+     */
+    key: string;
+    /**
+     * The time step number, higher == later. You may use this information for cache eviction to ensure oldest
+     * are evicted first. */
+    timeStepNumber: number;
+  }) => Promise<"duplicate" | "accepted">;
 };
 
 export type TotpOptionsCode = TotpOptionsShared & {
@@ -66,20 +75,22 @@ const defaultAllowedTimeSteps = 1;
 
 // TODO: Adjust HOTP to support different hash functions.
 
+/**
+ * In-memory code store. Not suitable for production.
+ */
 const createMemoryCodeStore: CodeStoreCreator = (options) => {
-  const usedCodes = [];
+  const usedCodes: { key: string; timeStepNumber: number }[] = [];
 
   return {
-    async check(code) {
-      if (usedCodes.includes(code)) {
+    async check({ key, timeStepNumber }) {
+      if (usedCodes.some((usedCode) => usedCode.key === key)) {
         return "duplicate";
       } else {
-        usedCodes.unshift(code);
+        usedCodes.push({ key, timeStepNumber });
 
         // Remove codes that could never be valid anymore anyway as we're passed that time.
-        while (usedCodes.length > options.allowedTimeSteps) {
-          usedCodes.shift();
-        }
+        usedCodes.sort((a, b) => b.timeStepNumber - a.timeStepNumber);
+        usedCodes.splice(options.allowedTimeSteps);
         return "accepted";
       }
     },
@@ -152,8 +163,11 @@ export function createTimeBasedOneTimePasswordValidator(
           stepUnixTime,
           optionsGenCode.timeStepSeconds,
         );
-        const codeStoreCode = `${timeStepNum}:${code}`;
-        const codeStoreCheckResult = await codeStore.check(codeStoreCode);
+        const codeStoreKey = `${timeStepNum}:${code}`;
+        const codeStoreCheckResult = await codeStore.check({
+          key: codeStoreKey,
+          timeStepNumber: timeStepNum,
+        });
         if (codeStoreCheckResult === "duplicate") {
           continue;
         }

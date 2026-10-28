@@ -15,7 +15,8 @@ import {
 /** Uses the same secret as the HMAC spec/tests. */
 const testSecret = hexToArrayBuffer("3132333435363738393031323334353637383930");
 /** Constant value for use in tests for consistent code checks. */
-const testTime = new Date("2026-10-27T12:00:00.000Z");
+const testTimeh12m00s00 = new Date("2026-10-27T12:00:00.000Z");
+const testTimeh12m30s00 = new Date("2026-10-27T12:00:30.000Z");
 
 /**
  * Known codes for the test secret and default code config. You can check the in the numeric test.
@@ -31,9 +32,9 @@ test("timeBasedOneTimePassword -  basic check", async () => {
   const totpValidator = createTimeBasedOneTimePasswordValidator({
     key: testSecret,
   });
-  const time = testTime;
+  const time = testTimeh12m00s00;
   const code1Result = await totpValidator.validate("472600", {
-    time: testTime,
+    time: testTimeh12m00s00,
   });
   assert.strictEqual(code1Result.isValid, true);
 
@@ -103,7 +104,7 @@ test("timeBasedOneTimePassword - 2 allowed time steps", async () => {
     key: testSecret,
     allowedTimeSteps: 2,
   });
-  const time = testTime;
+  const time = testTimeh12m00s00;
 
   assert.strictEqual(
     (await totpValidator.validate(knownCodes.h12m00s00, { time })).isValid,
@@ -134,9 +135,9 @@ test("timeBasedOneTimePassword - cannot re-use code", async () => {
   const totpValidator = createTimeBasedOneTimePasswordValidator({
     key: testSecret,
   });
-  const time = testTime;
+  const time = testTimeh12m00s00;
   const code1Result = await totpValidator.validate("472600", {
-    time: testTime,
+    time: testTimeh12m00s00,
   });
   assert.strictEqual(code1Result.isValid, true);
 
@@ -145,6 +146,41 @@ test("timeBasedOneTimePassword - cannot re-use code", async () => {
     time,
   });
   assert.strictEqual(codeReuseResult.isValid, false);
+});
+
+test("timeBasedOneTimePassword - in-memory code store - cannot re-use the newest code after cache eviction", async () => {
+  const totpValidator = createTimeBasedOneTimePasswordValidator({
+    key: testSecret,
+  });
+
+  // This code will now be stored in the code store so cannot be re-used.
+  assert.strictEqual(
+    (
+      await totpValidator.validate(knownCodes.h12m00s00, {
+        time: testTimeh12m00s00,
+      })
+    ).isValid,
+    true,
+  );
+  // Check T+30s with the next code, should work and overwrite the cache value.
+  assert.strictEqual(
+    (
+      await totpValidator.validate(knownCodes.h12m00s30, {
+        time: testTimeh12m30s00,
+      })
+    ).isValid,
+    true,
+  );
+  // Check T+30s again - makes sure that h12m00s30 code value was stored in the cache and we didn't clear the newer
+  // one by accident.
+  assert.strictEqual(
+    (
+      await totpValidator.validate(knownCodes.h12m00s30, {
+        time: testTimeh12m30s00,
+      })
+    ).isValid,
+    false,
+  );
 });
 
 test("timeBasedOneTimePassword - cannot re-use code - but two steps generate the same code", async () => {
@@ -203,7 +239,7 @@ test("timeBasedOneTimePasswordCode - numeric", async () => {
   // 12:00:00
   const { code: code3 } = await timeBasedOneTimePasswordCode({
     key: testSecret,
-    time: testTime,
+    time: testTimeh12m00s00,
   });
   assert.strictEqual(code3, knownCodes.h12m00s00);
 
@@ -219,7 +255,7 @@ test("timeBasedOneTimePasswordCode - alphanumeric", async () => {
   const { code } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     codeType: "alphanumeric",
-    time: testTime,
+    time: testTimeh12m00s00,
   });
   assert.strictEqual(code, "2MSUBE");
 });
