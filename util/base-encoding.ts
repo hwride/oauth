@@ -5,224 +5,7 @@ import { binaryToArrayBuffer, toBinary } from "./binary.ts";
   https://www.rfc-editor.org/info/rfc4648
  */
 
-const base16Alphabet = "0123456789ABCDEF";
-const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-const base64Alphabet =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const padChar = "=";
-
-/**
- * Convert an array buffer to base64.
- */
-export function toBase64(buffer: ArrayBuffer) {
-  return toBaseGeneric({
-    buffer,
-    alphabet: base64Alphabet,
-    charBitLength: 6,
-    numCharsPerGroup: 4,
-  });
-}
-
-/**
- * Convert a base 64 string to an ArrayBuffer.
- */
-export function fromBase64(base64Str: string): ArrayBuffer {
-  return fromBaseGeneric({
-    baseStr: base64Str,
-    alphabet: base64Alphabet,
-    charBitLength: 6,
-  });
-}
-
-/**
- * Convert an array buffer to base32.
- */
-export function toBase32(buffer: ArrayBuffer) {
-  return toBaseGeneric({
-    buffer,
-    alphabet: base32Alphabet,
-    charBitLength: 5,
-    numCharsPerGroup: 8,
-  });
-}
-
-/**
- * Convert a base 32 string to an ArrayBuffer.
- */
-export function fromBase32(base32Str: string): ArrayBuffer {
-  return fromBaseGeneric({
-    baseStr: base32Str,
-    alphabet: base32Alphabet,
-    charBitLength: 5,
-  });
-}
-
-/**
- * Convert an array buffer to base16.
- */
-export function toBase16(buffer: ArrayBuffer) {
-  return toBaseGeneric({
-    buffer,
-    alphabet: base16Alphabet,
-    charBitLength: 4,
-    numCharsPerGroup: 1,
-  });
-}
-
-/**
- * Convert a base 16 string to an ArrayBuffer.
- */
-export function fromBase16(base16Str: string): ArrayBuffer {
-  return fromBaseGeneric({
-    baseStr: base16Str,
-    alphabet: base16Alphabet,
-    charBitLength: 4,
-  });
-}
-
-export function fromBaseGeneric({
-  baseStr,
-  alphabet,
-  charBitLength,
-}: {
-  baseStr: string;
-  /**
-   * A string containing the alphabet to use for this base encoding. Index in the string should equal the character
-   * to use at that value.
-   */
-  alphabet: string;
-  /**
-   * This should match the number of bits required to represent numbers in that base. E.g.
-   *   base 64 = 6 bits
-   *   base 32 = 5 bits
-   *   base 16 = 4 bits
-   */
-  charBitLength: number;
-}): ArrayBuffer {
-  if (baseStr.length < 1) {
-    return new ArrayBuffer();
-  }
-
-  // Reverse alphabet lookup
-  const alphabetNumToChar: Record<string, string> = {};
-  for (let i = 0; i < alphabet.length; i++) {
-    alphabetNumToChar[alphabet[i]] = String(i);
-  }
-
-  let binaryStr = "";
-  for (const char of baseStr) {
-    // If we're at padding characters we are finished.
-    if (char === "=") {
-      break;
-    }
-
-    // Convert this character back to binary.
-    const numVal = Number(alphabetNumToChar[char]);
-    const charBinary = toBinary(new Uint8Array([numVal]).buffer);
-    const charBinaryClampedToBits = charBinary.slice(
-      -charBitLength,
-      charBinary.length,
-    );
-    binaryStr += charBinaryClampedToBits;
-  }
-
-  // Make sure binary string is a multiple of 8 bits.
-  // If not cut off the extras as they were padded 0s.
-  const binaryStr8Remainder = binaryStr.length % 8;
-  const binaryStrClamped =
-    binaryStr8Remainder === 0
-      ? binaryStr
-      : binaryStr.slice(0, -binaryStr8Remainder);
-
-  const buffer = binaryToArrayBuffer(binaryStrClamped);
-  return buffer;
-}
-
-const base32CharsIncludingPadding = [...base32Alphabet].map((c) => c);
-base32CharsIncludingPadding.push("=");
-const base32CharSet = new Set();
-for (const char of base32CharsIncludingPadding) {
-  base32CharSet.add(char);
-}
-
-/**
- * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
- */
-export function isBase64Like(str: string): boolean {
-  return isBaseLike({
-    str,
-    alphabet: base64Alphabet,
-    charBitLength: 6,
-    numCharsPerGroup: 4,
-  });
-}
-
-/**
- * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
- */
-export function isBase32Like(str: string): boolean {
-  return isBaseLike({
-    str,
-    alphabet: base32Alphabet,
-    charBitLength: 5,
-    numCharsPerGroup: 8,
-  });
-}
-
-/**
- * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
- */
-export function isBase16Like(str: string): boolean {
-  return isBaseLike({
-    str,
-    alphabet: base16Alphabet,
-    charBitLength: 4,
-    numCharsPerGroup: 1,
-  });
-}
-
-/**
- * Return whether a string is like a base X string. It does not guarantee it is completely correct encoding, but if it's
- * using the correct characters, of a correct looking length, and using padding characters correctly.
- */
-export function isBaseLike({
-  str,
-  alphabet,
-  numCharsPerGroup,
-}: {
-  str: string;
-  alphabet: string;
-  charBitLength: number;
-  numCharsPerGroup: number;
-}): boolean {
-  // Empty strings are considered matching.
-  if (str.length < 1) return true;
-
-  // Check the string is multiple of expected character group size.
-  if (str.length % numCharsPerGroup !== 0) return false;
-
-  // Check contains only characters from this base's character set.
-  let countPad = 0;
-  for (const char of str) {
-    if (char === "=") countPad++;
-    else if (!alphabet.includes(char)) return false;
-  }
-
-  // Check if using = only at the end as padding character.
-  if (str.includes("=") && str.match(/=[^=].*$/)) {
-    return false;
-  }
-
-  return true;
-}
-
-export function toBaseGeneric({
-  buffer,
-  alphabet,
-  charBitLength,
-  numCharsPerGroup,
-}: {
-  buffer: ArrayBuffer;
+type BaseConfig = {
   /**
    * A string containing the alphabet to use for this base encoding. Index in the string should equal the character
    * to use at that value.
@@ -240,7 +23,120 @@ export function toBaseGeneric({
    * For example base 32 uses 40-bit groups, and 5-bits chars, 40/5 = 8 chars per group.
    */
   numCharsPerGroup: number;
-}) {
+};
+const base16Config: BaseConfig = {
+  alphabet: "0123456789ABCDEF",
+  charBitLength: 4,
+  numCharsPerGroup: 1,
+};
+const base32Config: BaseConfig = {
+  alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
+  charBitLength: 5,
+  numCharsPerGroup: 8,
+};
+const base64Config: BaseConfig = {
+  alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+  charBitLength: 6,
+  numCharsPerGroup: 4,
+};
+const padChar = "=";
+
+/**
+ * Convert an array buffer to base64.
+ */
+export function toBase64(buffer: ArrayBuffer) {
+  return toBaseGeneric({
+    ...base64Config,
+    buffer,
+  });
+}
+
+/**
+ * Convert a base 64 string to an ArrayBuffer.
+ */
+export function fromBase64(base64Str: string): ArrayBuffer {
+  return fromBaseGeneric({
+    ...base64Config,
+    baseStr: base64Str,
+  });
+}
+
+/**
+ * Convert an array buffer to base32.
+ */
+export function toBase32(buffer: ArrayBuffer) {
+  return toBaseGeneric({
+    ...base32Config,
+    buffer,
+  });
+}
+
+/**
+ * Convert a base 32 string to an ArrayBuffer.
+ */
+export function fromBase32(base32Str: string): ArrayBuffer {
+  return fromBaseGeneric({
+    ...base32Config,
+    baseStr: base32Str,
+  });
+}
+
+/**
+ * Convert an array buffer to base16.
+ */
+export function toBase16(buffer: ArrayBuffer) {
+  return toBaseGeneric({
+    ...base16Config,
+    buffer,
+  });
+}
+
+/**
+ * Convert a base 16 string to an ArrayBuffer.
+ */
+export function fromBase16(base16Str: string): ArrayBuffer {
+  return fromBaseGeneric({
+    ...base16Config,
+    baseStr: base16Str,
+  });
+}
+
+/**
+ * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
+ */
+export function isBase64Like(str: string): boolean {
+  return isBaseLikeGeneric({
+    ...base64Config,
+    str,
+  });
+}
+
+/**
+ * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
+ */
+export function isBase32Like(str: string): boolean {
+  return isBaseLikeGeneric({
+    ...base32Config,
+    str,
+  });
+}
+
+/**
+ * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
+ */
+export function isBase16Like(str: string): boolean {
+  return isBaseLikeGeneric({
+    ...base16Config,
+    str,
+  });
+}
+
+export function toBaseGeneric({
+  buffer,
+  alphabet,
+  charBitLength,
+  numCharsPerGroup,
+}: BaseConfig & { buffer: ArrayBuffer }) {
   // We represent charBitLength bits per character by choosing a base X character alphabet.
   // If not a multiple of charBitLength we zero-pad with =, this is an extra character.
   // We always process in groups of numCharsPerGroup length. If there are fewer than bits in the source buffer to
@@ -288,4 +184,78 @@ export function toBaseGeneric({
     }
   }
   return baseEncodedStr;
+}
+
+export function fromBaseGeneric({
+  baseStr,
+  alphabet,
+  charBitLength,
+}: BaseConfig & { baseStr: string }): ArrayBuffer {
+  if (baseStr.length < 1) {
+    return new ArrayBuffer();
+  }
+
+  // Reverse alphabet lookup
+  const alphabetNumToChar: Record<string, string> = {};
+  for (let i = 0; i < alphabet.length; i++) {
+    alphabetNumToChar[alphabet[i]] = String(i);
+  }
+
+  let binaryStr = "";
+  for (const char of baseStr) {
+    // If we're at padding characters we are finished.
+    if (char === "=") {
+      break;
+    }
+
+    // Convert this character back to binary.
+    const numVal = Number(alphabetNumToChar[char]);
+    const charBinary = toBinary(new Uint8Array([numVal]).buffer);
+    const charBinaryClampedToBits = charBinary.slice(
+      -charBitLength,
+      charBinary.length,
+    );
+    binaryStr += charBinaryClampedToBits;
+  }
+
+  // Make sure binary string is a multiple of 8 bits.
+  // If not cut off the extras as they were padded 0s.
+  const binaryStr8Remainder = binaryStr.length % 8;
+  const binaryStrClamped =
+    binaryStr8Remainder === 0
+      ? binaryStr
+      : binaryStr.slice(0, -binaryStr8Remainder);
+
+  const buffer = binaryToArrayBuffer(binaryStrClamped);
+  return buffer;
+}
+
+/**
+ * Return whether a string is like a base X string. It does not guarantee it is completely correct encoding, but if it's
+ * using the correct characters, of a correct looking length, and using padding characters correctly.
+ */
+export function isBaseLikeGeneric({
+  str,
+  alphabet,
+  numCharsPerGroup,
+}: BaseConfig & { str: string }): boolean {
+  // Empty strings are considered matching.
+  if (str.length < 1) return true;
+
+  // Check the string is multiple of expected character group size.
+  if (str.length % numCharsPerGroup !== 0) return false;
+
+  // Check contains only characters from this base's character set.
+  let countPad = 0;
+  for (const char of str) {
+    if (char === "=") countPad++;
+    else if (!alphabet.includes(char)) return false;
+  }
+
+  // Check if using = only at the end as padding character.
+  if (str.includes("=") && str.match(/=[^=].*$/)) {
+    return false;
+  }
+
+  return true;
 }
