@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fromBase32, isBase32, toBase32, toBase64 } from "./base-encoding.ts";
+import {
+  fromBase32,
+  isBase32,
+  toBase16,
+  toBase32,
+  toBase64,
+} from "./base-encoding.ts";
 
 const rfc4648TestVectors = [
   // The spec defines input as a string, so it will be the bits for the ASCII encoding of that string.
@@ -38,14 +44,6 @@ const rfc4648TestVectors = [
   },
 ] as const;
 
-for (const { binaryAsAscii, base32 } of rfc4648TestVectors) {
-  test(`toBase32 - input: ${binaryAsAscii}, expected: ${base32}`, () => {
-    // Default TextEncoder encoding will encode the string as ASCII bits for those characters in the ASCII range.
-    const buffer = new TextEncoder().encode(binaryAsAscii).buffer;
-    assert.strictEqual(toBase32(buffer), base32);
-  });
-}
-
 for (const { binaryAsAscii, base64 } of rfc4648TestVectors) {
   test(`toBase64 - input: ${binaryAsAscii}, expected: ${base64}`, () => {
     // Default TextEncoder encoding will encode the string as ASCII bits for those characters in the ASCII range.
@@ -55,9 +53,25 @@ for (const { binaryAsAscii, base64 } of rfc4648TestVectors) {
 }
 
 for (const { binaryAsAscii, base32 } of rfc4648TestVectors) {
+  test(`toBase32 - input: ${binaryAsAscii}, expected: ${base32}`, () => {
+    // Default TextEncoder encoding will encode the string as ASCII bits for those characters in the ASCII range.
+    const buffer = new TextEncoder().encode(binaryAsAscii).buffer;
+    assert.strictEqual(toBase32(buffer), base32);
+  });
+}
+
+for (const { binaryAsAscii, base32 } of rfc4648TestVectors) {
   test(`fromBase32 - input: ${base32}, expected: ${binaryAsAscii}`, () => {
     const expectedBuffer = new TextEncoder().encode(binaryAsAscii).buffer;
     assert.deepStrictEqual(fromBase32(base32), expectedBuffer);
+  });
+}
+
+for (const { binaryAsAscii, base16 } of rfc4648TestVectors) {
+  test(`toBase16 - input: ${binaryAsAscii}, expected: ${base16}`, () => {
+    // Default TextEncoder encoding will encode the string as ASCII bits for those characters in the ASCII range.
+    const buffer = new TextEncoder().encode(binaryAsAscii).buffer;
+    assert.strictEqual(toBase16(buffer), base16);
   });
 }
 

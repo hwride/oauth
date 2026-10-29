@@ -5,6 +5,7 @@ import { binaryToArrayBuffer, toBinary } from "./binary.ts";
   https://www.rfc-editor.org/info/rfc4648
  */
 
+const base16Alphabet = "0123456789ABCDEF";
 const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const base32AlphabetObject = Object.freeze({
   0: "A",
@@ -49,6 +50,18 @@ for (const char of base32Chars) {
 const base32AlphabetReverse: Record<string, string> = {};
 for (const [num, char] of Object.entries(base32AlphabetObject)) {
   base32AlphabetReverse[char] = num;
+}
+
+/**
+ * Convert an array buffer to base16.
+ */
+export function toBase16(buffer: ArrayBuffer) {
+  return toBaseGeneric({
+    buffer,
+    alphabet: base16Alphabet,
+    charBitLength: 4,
+    numCharsPerGroup: 1,
+  });
 }
 
 /**
