@@ -62,6 +62,16 @@ export function fromBase64(base64Str: string): ArrayBuffer {
 }
 
 /**
+ * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
+ */
+export function isBase64Like(str: string): boolean {
+  return isBaseLikeGeneric({
+    ...base64Config,
+    str,
+  });
+}
+
+/**
  * Convert an array buffer to base32.
  */
 export function toBase32(buffer: ArrayBuffer) {
@@ -78,6 +88,16 @@ export function fromBase32(base32Str: string): ArrayBuffer {
   return fromBaseGeneric({
     ...base32Config,
     baseStr: base32Str,
+  });
+}
+
+/**
+ * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
+ */
+export function isBase32Like(str: string): boolean {
+  return isBaseLikeGeneric({
+    ...base32Config,
+    str,
   });
 }
 
@@ -104,26 +124,6 @@ export function fromBase16(base16Str: string): ArrayBuffer {
 /**
  * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
  */
-export function isBase64Like(str: string): boolean {
-  return isBaseLikeGeneric({
-    ...base64Config,
-    str,
-  });
-}
-
-/**
- * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
- */
-export function isBase32Like(str: string): boolean {
-  return isBaseLikeGeneric({
-    ...base32Config,
-    str,
-  });
-}
-
-/**
- * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
- */
 export function isBase16Like(str: string): boolean {
   return isBaseLikeGeneric({
     ...base16Config,
@@ -131,6 +131,9 @@ export function isBase16Like(str: string): boolean {
   });
 }
 
+/**
+ * Generic mechanism for computing base string encodings for a raw buffer.
+ */
 export function toBaseGeneric({
   buffer,
   alphabet,
@@ -186,6 +189,9 @@ export function toBaseGeneric({
   return baseEncodedStr;
 }
 
+/**
+ * Generic mechanism for getting a raw buffer from a base encoded string.
+ */
 export function fromBaseGeneric({
   baseStr,
   alphabet,
