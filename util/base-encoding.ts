@@ -7,49 +7,15 @@ import { binaryToArrayBuffer, toBinary } from "./binary.ts";
 
 const base16Alphabet = "0123456789ABCDEF";
 const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-const base32AlphabetObject = Object.freeze({
-  0: "A",
-  1: "B",
-  2: "C",
-  3: "D",
-  4: "E",
-  5: "F",
-  6: "G",
-  7: "H",
-  8: "I",
-  9: "J",
-  10: "K",
-  11: "L",
-  12: "M",
-  13: "N",
-  14: "O",
-  15: "P",
-  16: "Q",
-  17: "R",
-  18: "S",
-  19: "T",
-  20: "U",
-  21: "V",
-  22: "W",
-  23: "X",
-  24: "Y",
-  25: "Z",
-  26: "2",
-  27: "3",
-  28: "4",
-  29: "5",
-  30: "6",
-  31: "7",
-  pad: "=",
-});
-export const base32Chars = Object.freeze(Object.values(base32AlphabetObject));
+export const base32CharsIncludingPadding = [...base32Alphabet].map((c) => c);
+base32CharsIncludingPadding.push("=");
 const base32CharSet = new Set();
-for (const char of base32Chars) {
+for (const char of base32CharsIncludingPadding) {
   base32CharSet.add(char);
 }
 const base32AlphabetReverse: Record<string, string> = {};
-for (const [num, char] of Object.entries(base32AlphabetObject)) {
-  base32AlphabetReverse[char] = num;
+for (let i = 0; i < base32Alphabet.length; i++) {
+  base32AlphabetReverse[base32Alphabet[i]] = String(i);
 }
 
 /**
