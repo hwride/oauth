@@ -6,6 +6,7 @@ import { binaryToArrayBuffer, toBinary } from "./binary.ts";
  */
 
 type BaseConfig = {
+  name: string;
   /**
    * A string containing the alphabet to use for this base encoding. Index in the string should equal the character
    * to use at that value.
@@ -25,16 +26,19 @@ type BaseConfig = {
   numCharsPerGroup: number;
 };
 const base16Config: BaseConfig = {
+  name: "base16",
   alphabet: "0123456789ABCDEF",
   charBitLength: 4,
   numCharsPerGroup: 1,
 };
 const base32Config: BaseConfig = {
+  name: "base32",
   alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
   charBitLength: 5,
   numCharsPerGroup: 8,
 };
 const base64Config: BaseConfig = {
+  name: "base64",
   alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
   charBitLength: 6,
   numCharsPerGroup: 4,
@@ -192,13 +196,16 @@ export function toBaseGeneric({
 /**
  * Generic mechanism for getting a raw buffer from a base encoded string.
  */
-export function fromBaseGeneric({
-  baseStr,
-  alphabet,
-  charBitLength,
-}: BaseConfig & { baseStr: string }): ArrayBuffer {
+export function fromBaseGeneric(
+  opts: BaseConfig & { baseStr: string },
+): ArrayBuffer {
+  const { baseStr, alphabet, charBitLength } = opts;
   if (baseStr.length < 1) {
     return new ArrayBuffer();
+  }
+
+  if (!isBaseLikeGeneric({ ...opts, str: baseStr })) {
+    throw new Error(`String is not valid ${opts.name}`);
   }
 
   // Reverse alphabet lookup

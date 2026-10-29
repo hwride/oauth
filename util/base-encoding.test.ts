@@ -91,11 +91,14 @@ for (const { binaryAsAscii, base32 } of rfc4648TestVectors) {
   });
 }
 
-test("fromBase32 - accepts lowercase", () => {
-  const buffer = new TextEncoder().encode(
-    rfc4648TestVectors[4].binaryAsAscii,
-  ).buffer;
-  assert.deepStrictEqual(fromBase32(rfc4648TestVectors[4].base32), buffer);
+test("fromBase32 - does not accept lowercase", () => {
+  try {
+    fromBase32(rfc4648TestVectors[4].base32.toLowerCase());
+  } catch (e) {
+    assert.strictEqual(e.message, "String is not valid base32");
+    return;
+  }
+  assert.strictEqual(true, false, "This should have thrown an error");
 });
 
 test("isBase32 - valid", () => {
