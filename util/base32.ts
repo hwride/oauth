@@ -1,10 +1,12 @@
 import { binaryToArrayBuffer, toBinary } from "./binary.ts";
 
+/*
+    RFC 4648: The Base16, Base32, and Base64 Data Encodings
+  https://www.rfc-editor.org/info/rfc4648
+ */
+
 /**
  * Convert an array buffer to base32.
- *
- * RFC 4648: The Base16, Base32, and Base64 Data Encodings
- * https://www.rfc-editor.org/info/rfc4648
  */
 export function toBase32(buffer: ArrayBuffer) {
   // We represent 5 bits per character by choosing a 32 character alphabet.
@@ -56,6 +58,43 @@ export function toBase32(buffer: ArrayBuffer) {
 }
 
 /**
+ * Convert a base 32 string to an ArrayBuffer.
+ */
+export function fromBase32(base32Str: string): ArrayBuffer {
+  if (!isBase32(base32Str)) {
+    throw new Error("Not a base 32 string");
+  }
+  if (base32Str.length < 1) {
+    return new ArrayBuffer();
+  }
+  const base32StrUpper = base32Str.toUpperCase();
+
+  let binaryStr = "";
+  for (const char of base32StrUpper) {
+    // If we're at padding characters we are finished.
+    if (char === "=") {
+      break;
+    }
+
+    // Convert this character back to binary.
+    const numVal = Number(base32AlphabetReverse[char]);
+    const binaryStrChunk = toBinary(new Uint8Array([numVal]).buffer);
+    const binaryStrChunk5bits = binaryStrChunk.slice(-5, binaryStrChunk.length);
+    binaryStr += binaryStrChunk5bits;
+  }
+
+  // Make sure binary string is a multiple of 8 bits.
+  const binaryStr8Remainder = binaryStr.length % 8;
+  const binaryStrClamped =
+    binaryStr8Remainder === 0
+      ? binaryStr
+      : binaryStr.slice(0, -binaryStr8Remainder);
+
+  const buffer = binaryToArrayBuffer(binaryStrClamped);
+  return buffer;
+}
+
+/**
  * Return whether a string is a base32 string.
  */
 export function isBase32(str: string): boolean {
@@ -63,8 +102,15 @@ export function isBase32(str: string): boolean {
   if (str.length % 8 !== 0) return false;
 
   // Check contains only base 32 characters.
+  let countPad = 0;
   for (const char of str.toUpperCase()) {
     if (!base32CharSet.has(char)) return false;
+    if (char === "=") countPad++;
+  }
+
+  // There can only be this number of padding characters.
+  if (![0, 1, 3, 4, 6].includes(countPad)) {
+    return false;
   }
 
   // Check if using = only at the end as padding character.
@@ -75,7 +121,7 @@ export function isBase32(str: string): boolean {
   return true;
 }
 
-const base32Alphabet = {
+const base32Alphabet = Object.freeze({
   0: "A",
   1: "B",
   2: "C",
@@ -109,9 +155,13 @@ const base32Alphabet = {
   30: "6",
   31: "7",
   pad: "=",
-};
+});
 export const base32Chars = Object.freeze(Object.values(base32Alphabet));
 const base32CharSet = new Set();
 for (const char of base32Chars) {
   base32CharSet.add(char);
+}
+const base32AlphabetReverse: Record<string, string> = {};
+for (const [num, char] of Object.entries(base32Alphabet)) {
+  base32AlphabetReverse[char] = num;
 }
