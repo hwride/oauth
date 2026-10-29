@@ -1,8 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  fromBase16,
   fromBase32,
-  isBase32,
+  fromBase64,
+  isBase16Like,
+  isBase32Like,
+  isBase64Like,
   toBase16,
   toBase32,
   toBase64,
@@ -44,6 +48,7 @@ const rfc4648TestVectors = [
   },
 ] as const;
 
+// bass 64
 for (const { binaryAsAscii, base64 } of rfc4648TestVectors) {
   test(`toBase64 - input: ${binaryAsAscii}, expected: ${base64}`, () => {
     // Default TextEncoder encoding will encode the string as ASCII bits for those characters in the ASCII range.
@@ -52,6 +57,25 @@ for (const { binaryAsAscii, base64 } of rfc4648TestVectors) {
   });
 }
 
+for (const { binaryAsAscii, base64 } of rfc4648TestVectors) {
+  test(`fromBase64 - input: ${base64}, expected: ${binaryAsAscii}`, () => {
+    const expectedBuffer = new TextEncoder().encode(binaryAsAscii).buffer;
+    assert.deepStrictEqual(fromBase64(base64), expectedBuffer);
+  });
+}
+
+test("isBase64 - valid", () => {
+  assert.strictEqual(isBase64Like(""), true);
+  assert.strictEqual(isBase64Like("Zm8="), true);
+  assert.strictEqual(isBase64Like("Zm9v"), true);
+});
+
+test("isBase64 - invalid characters", () => {
+  assert.strictEqual(isBase64Like("MMY´"), false);
+  assert.strictEqual(isBase64Like("MMY@"), false);
+});
+
+// bass 32
 for (const { binaryAsAscii, base32 } of rfc4648TestVectors) {
   test(`toBase32 - input: ${binaryAsAscii}, expected: ${base32}`, () => {
     // Default TextEncoder encoding will encode the string as ASCII bits for those characters in the ASCII range.
@@ -67,14 +91,6 @@ for (const { binaryAsAscii, base32 } of rfc4648TestVectors) {
   });
 }
 
-for (const { binaryAsAscii, base16 } of rfc4648TestVectors) {
-  test(`toBase16 - input: ${binaryAsAscii}, expected: ${base16}`, () => {
-    // Default TextEncoder encoding will encode the string as ASCII bits for those characters in the ASCII range.
-    const buffer = new TextEncoder().encode(binaryAsAscii).buffer;
-    assert.strictEqual(toBase16(buffer), base16);
-  });
-}
-
 test("fromBase32 - accepts lowercase", () => {
   const buffer = new TextEncoder().encode(
     rfc4648TestVectors[4].binaryAsAscii,
@@ -83,44 +99,57 @@ test("fromBase32 - accepts lowercase", () => {
 });
 
 test("isBase32 - valid", () => {
-  assert.strictEqual(isBase32(""), true);
-  assert.strictEqual(isBase32("MY======"), true);
-  assert.strictEqual(isBase32("MZXW6YTB"), true);
-});
-
-test("isBase32 - accept lowercase", () => {
-  assert.strictEqual(isBase32(""), true);
-  assert.strictEqual(isBase32("my======"), true);
-  assert.strictEqual(isBase32("mzXw6ytb"), true);
+  assert.strictEqual(isBase32Like(""), true);
+  assert.strictEqual(isBase32Like("MY======"), true);
+  assert.strictEqual(isBase32Like("MZXW6YTB"), true);
 });
 
 test("isBase32 - invalid characters", () => {
-  assert.strictEqual(isBase32("1"), false);
-  assert.strictEqual(isBase32("MY1=="), false);
-  assert.strictEqual(isBase32("MY´"), false);
-  assert.strictEqual(isBase32("MY@"), false);
+  assert.strictEqual(isBase32Like("MMMMMMY´"), false);
+  assert.strictEqual(isBase32Like("MMMMMMY@"), false);
 });
 
 test("isBase32 - padding must only be at the end", () => {
-  assert.strictEqual(isBase32("=ABC"), false);
-  assert.strictEqual(isBase32("A=BC"), false);
-  assert.strictEqual(isBase32("M=Y====="), false);
+  assert.strictEqual(isBase32Like("=ABC"), false);
+  assert.strictEqual(isBase32Like("A=BC"), false);
+  assert.strictEqual(isBase32Like("M=Y====="), false);
 });
 
 test("isBase32 - invalid padding", () => {
-  assert.strictEqual(isBase32("="), false);
-  assert.strictEqual(isBase32("A="), false);
-  assert.strictEqual(isBase32("MZXW6YTB="), false);
-  assert.strictEqual(isBase32("MY======="), false);
-});
-
-test("isBase32 - invalid padding lengths", () => {
-  assert.strictEqual(isBase32("A======="), false);
-  assert.strictEqual(isBase32("AAA====="), false);
-  assert.strictEqual(isBase32("========"), false);
+  assert.strictEqual(isBase32Like("="), false);
+  assert.strictEqual(isBase32Like("A="), false);
+  assert.strictEqual(isBase32Like("MZXW6YTB="), false);
+  assert.strictEqual(isBase32Like("MY======="), false);
 });
 
 test("isBase32 - invalid unpadded lengths", () => {
-  assert.strictEqual(isBase32("A"), false);
-  assert.strictEqual(isBase32("ABC"), false);
+  assert.strictEqual(isBase32Like("A"), false);
+  assert.strictEqual(isBase32Like("ABC"), false);
+});
+
+// bass 16
+for (const { binaryAsAscii, base16 } of rfc4648TestVectors) {
+  test(`toBase16 - input: ${binaryAsAscii}, expected: ${base16}`, () => {
+    // Default TextEncoder encoding will encode the string as ASCII bits for those characters in the ASCII range.
+    const buffer = new TextEncoder().encode(binaryAsAscii).buffer;
+    assert.strictEqual(toBase16(buffer), base16);
+  });
+}
+
+for (const { binaryAsAscii, base16 } of rfc4648TestVectors) {
+  test(`fromBase16 - input: ${base16}, expected: ${binaryAsAscii}`, () => {
+    const expectedBuffer = new TextEncoder().encode(binaryAsAscii).buffer;
+    assert.deepStrictEqual(fromBase16(base16), expectedBuffer);
+  });
+}
+
+test("isBase16 - valid", () => {
+  assert.strictEqual(isBase16Like(""), true);
+  assert.strictEqual(isBase16Like(rfc4648TestVectors[0].base16), true);
+  assert.strictEqual(isBase16Like(rfc4648TestVectors[1].base16), true);
+});
+
+test("isBase16 - invalid characters", () => {
+  assert.strictEqual(isBase16Like("MMY´"), false);
+  assert.strictEqual(isBase16Like("MMY@"), false);
 });

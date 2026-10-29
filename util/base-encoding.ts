@@ -7,26 +7,30 @@ import { binaryToArrayBuffer, toBinary } from "./binary.ts";
 
 const base16Alphabet = "0123456789ABCDEF";
 const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-export const base32CharsIncludingPadding = [...base32Alphabet].map((c) => c);
-base32CharsIncludingPadding.push("=");
-const base32CharSet = new Set();
-for (const char of base32CharsIncludingPadding) {
-  base32CharSet.add(char);
-}
-const base32AlphabetReverse: Record<string, string> = {};
-for (let i = 0; i < base32Alphabet.length; i++) {
-  base32AlphabetReverse[base32Alphabet[i]] = String(i);
+const base64Alphabet =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const padChar = "=";
+
+/**
+ * Convert an array buffer to base64.
+ */
+export function toBase64(buffer: ArrayBuffer) {
+  return toBaseGeneric({
+    buffer,
+    alphabet: base64Alphabet,
+    charBitLength: 6,
+    numCharsPerGroup: 4,
+  });
 }
 
 /**
- * Convert an array buffer to base16.
+ * Convert a base 64 string to an ArrayBuffer.
  */
-export function toBase16(buffer: ArrayBuffer) {
-  return toBaseGeneric({
-    buffer,
-    alphabet: base16Alphabet,
-    charBitLength: 4,
-    numCharsPerGroup: 1,
+export function fromBase64(base64Str: string): ArrayBuffer {
+  return fromBaseGeneric({
+    baseStr: base64Str,
+    alphabet: base64Alphabet,
+    charBitLength: 6,
   });
 }
 
@@ -46,29 +50,84 @@ export function toBase32(buffer: ArrayBuffer) {
  * Convert a base 32 string to an ArrayBuffer.
  */
 export function fromBase32(base32Str: string): ArrayBuffer {
-  if (!isBase32(base32Str)) {
-    throw new Error("Not a base 32 string");
-  }
-  if (base32Str.length < 1) {
+  return fromBaseGeneric({
+    baseStr: base32Str,
+    alphabet: base32Alphabet,
+    charBitLength: 5,
+  });
+}
+
+/**
+ * Convert an array buffer to base16.
+ */
+export function toBase16(buffer: ArrayBuffer) {
+  return toBaseGeneric({
+    buffer,
+    alphabet: base16Alphabet,
+    charBitLength: 4,
+    numCharsPerGroup: 1,
+  });
+}
+
+/**
+ * Convert a base 16 string to an ArrayBuffer.
+ */
+export function fromBase16(base16Str: string): ArrayBuffer {
+  return fromBaseGeneric({
+    baseStr: base16Str,
+    alphabet: base16Alphabet,
+    charBitLength: 4,
+  });
+}
+
+export function fromBaseGeneric({
+  baseStr,
+  alphabet,
+  charBitLength,
+}: {
+  baseStr: string;
+  /**
+   * A string containing the alphabet to use for this base encoding. Index in the string should equal the character
+   * to use at that value.
+   */
+  alphabet: string;
+  /**
+   * This should match the number of bits required to represent numbers in that base. E.g.
+   *   base 64 = 6 bits
+   *   base 32 = 5 bits
+   *   base 16 = 4 bits
+   */
+  charBitLength: number;
+}): ArrayBuffer {
+  if (baseStr.length < 1) {
     return new ArrayBuffer();
   }
-  const base32StrUpper = base32Str.toUpperCase();
+
+  // Reverse alphabet lookup
+  const alphabetNumToChar: Record<string, string> = {};
+  for (let i = 0; i < alphabet.length; i++) {
+    alphabetNumToChar[alphabet[i]] = String(i);
+  }
 
   let binaryStr = "";
-  for (const char of base32StrUpper) {
+  for (const char of baseStr) {
     // If we're at padding characters we are finished.
     if (char === "=") {
       break;
     }
 
     // Convert this character back to binary.
-    const numVal = Number(base32AlphabetReverse[char]);
-    const binaryStrChunk = toBinary(new Uint8Array([numVal]).buffer);
-    const binaryStrChunk5bits = binaryStrChunk.slice(-5, binaryStrChunk.length);
-    binaryStr += binaryStrChunk5bits;
+    const numVal = Number(alphabetNumToChar[char]);
+    const charBinary = toBinary(new Uint8Array([numVal]).buffer);
+    const charBinaryClampedToBits = charBinary.slice(
+      -charBitLength,
+      charBinary.length,
+    );
+    binaryStr += charBinaryClampedToBits;
   }
 
   // Make sure binary string is a multiple of 8 bits.
+  // If not cut off the extras as they were padded 0s.
   const binaryStr8Remainder = binaryStr.length % 8;
   const binaryStrClamped =
     binaryStr8Remainder === 0
@@ -79,23 +138,74 @@ export function fromBase32(base32Str: string): ArrayBuffer {
   return buffer;
 }
 
+const base32CharsIncludingPadding = [...base32Alphabet].map((c) => c);
+base32CharsIncludingPadding.push("=");
+const base32CharSet = new Set();
+for (const char of base32CharsIncludingPadding) {
+  base32CharSet.add(char);
+}
+
 /**
- * Return whether a string is a base32 string.
+ * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
  */
-export function isBase32(str: string): boolean {
+export function isBase64Like(str: string): boolean {
+  return isBaseLike({
+    str,
+    alphabet: base64Alphabet,
+    charBitLength: 6,
+    numCharsPerGroup: 4,
+  });
+}
+
+/**
+ * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
+ */
+export function isBase32Like(str: string): boolean {
+  return isBaseLike({
+    str,
+    alphabet: base32Alphabet,
+    charBitLength: 5,
+    numCharsPerGroup: 8,
+  });
+}
+
+/**
+ * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
+ */
+export function isBase16Like(str: string): boolean {
+  return isBaseLike({
+    str,
+    alphabet: base16Alphabet,
+    charBitLength: 4,
+    numCharsPerGroup: 1,
+  });
+}
+
+/**
+ * Return whether a string is like a base X string. It does not guarantee it is completely correct encoding, but if it's
+ * using the correct characters, of a correct looking length, and using padding characters correctly.
+ */
+export function isBaseLike({
+  str,
+  alphabet,
+  numCharsPerGroup,
+}: {
+  str: string;
+  alphabet: string;
+  charBitLength: number;
+  numCharsPerGroup: number;
+}): boolean {
+  // Empty strings are considered matching.
   if (str.length < 1) return true;
-  if (str.length % 8 !== 0) return false;
 
-  // Check contains only base 32 characters.
+  // Check the string is multiple of expected character group size.
+  if (str.length % numCharsPerGroup !== 0) return false;
+
+  // Check contains only characters from this base's character set.
   let countPad = 0;
-  for (const char of str.toUpperCase()) {
-    if (!base32CharSet.has(char)) return false;
+  for (const char of str) {
     if (char === "=") countPad++;
-  }
-
-  // There can only be this number of padding characters.
-  if (![0, 1, 3, 4, 6].includes(countPad)) {
-    return false;
+    else if (!alphabet.includes(char)) return false;
   }
 
   // Check if using = only at the end as padding character.
@@ -104,22 +214,6 @@ export function isBase32(str: string): boolean {
   }
 
   return true;
-}
-
-const base64Chars =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const padChar = "=";
-
-/**
- * Convert an array buffer to base64.
- */
-export function toBase64(buffer: ArrayBuffer) {
-  return toBaseGeneric({
-    buffer,
-    alphabet: base64Chars,
-    charBitLength: 6,
-    numCharsPerGroup: 4,
-  });
 }
 
 export function toBaseGeneric({
