@@ -1,8 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { toBase16 } from "./base16.ts";
-import { fromBase32, isBase32, toBase32 } from "./base32.ts";
-import { toBase64 } from "./base64.ts";
+import { fromBase32, isBase32, toBase32, toBase64 } from "./base-encoding.ts";
 
 const rfc4648TestVectors = [
   // The spec defines input as a string, so it will be the bits for the ASCII encoding of that string.
