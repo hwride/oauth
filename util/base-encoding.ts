@@ -29,7 +29,7 @@ const base16Config: BaseConfig = {
   name: "base16",
   alphabet: "0123456789ABCDEF",
   charBitLength: 4,
-  numCharsPerGroup: 1,
+  numCharsPerGroup: 2,
 };
 const base32Config: BaseConfig = {
   name: "base32",
