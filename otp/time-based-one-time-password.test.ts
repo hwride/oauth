@@ -28,7 +28,7 @@ const knownCodes = Object.freeze({
 test("timeBasedOneTimePassword -  basic check", async () => {
   const totpValidator = createTimeBasedOneTimePasswordValidator({
     key: testSecret,
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
   });
   const time = testTimeh12m00s00;
   const code1Result = await totpValidator.validate("472600", {
@@ -99,7 +99,7 @@ test("timeBasedOneTimePassword - validation", async () => {
   // hashAlgorithm
   expectError(
     { hashAlgorithm: "SHA-3" as HashAlgorithm },
-    "Unsupported hash algorithm. Supported: SHA-1,SHA-256,SHA-512",
+    "Unsupported hash algorithm. Supported: SHA1,SHA256,SHA512",
   );
 });
 
@@ -167,7 +167,7 @@ test("TOTP (RFC 6238) spec tests - SHA-1", async () => {
       key: totpSpecTestSecrets.sha1,
       time: new Date(testValue.unixTime * 1000),
       codeLength: 8,
-      hashAlgorithm: "SHA-1",
+      hashAlgorithm: "SHA1",
     });
     assert.equal(code, testValue.sha1);
   }
@@ -184,7 +184,7 @@ test("TOTP (RFC 6238) spec tests - SHA-256", async () => {
       key: totpSpecTestSecrets.sha256,
       time: new Date(testValue.unixTime * 1000),
       codeLength: 8,
-      hashAlgorithm: "SHA-256",
+      hashAlgorithm: "SHA256",
     });
     assert.equal(code, testValue.sha256);
   }
@@ -201,7 +201,7 @@ test("TOTP (RFC 6238) spec tests - SHA-512", async () => {
       key: totpSpecTestSecrets.sha512,
       time: new Date(testValue.unixTime * 1000),
       codeLength: 8,
-      hashAlgorithm: "SHA-512",
+      hashAlgorithm: "SHA512",
     });
     assert.equal(code, testValue.sha512);
   }
@@ -222,7 +222,7 @@ test("timeBasedOneTimePassword - 2 allowed time steps", async () => {
   const totpValidator = createTimeBasedOneTimePasswordValidator({
     key: testSecret,
     allowedTimeSteps: 2,
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
   });
   const time = testTimeh12m00s00;
 
@@ -254,7 +254,7 @@ test("timeBasedOneTimePassword - 2 allowed time steps", async () => {
 test("timeBasedOneTimePassword - cannot re-use code", async () => {
   const totpValidator = createTimeBasedOneTimePasswordValidator({
     key: testSecret,
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
   });
   const time = testTimeh12m00s00;
   const code1Result = await totpValidator.validate("472600", {
@@ -272,7 +272,7 @@ test("timeBasedOneTimePassword - cannot re-use code", async () => {
 test("timeBasedOneTimePassword - in-memory code store - cannot re-use the newest code after cache eviction", async () => {
   const totpValidator = createTimeBasedOneTimePasswordValidator({
     key: testSecret,
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
   });
 
   // This code will now be stored in the code store so cannot be re-used.
@@ -312,12 +312,12 @@ test("timeBasedOneTimePassword - cannot re-use code - but two steps generate the
   const first = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time,
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
   });
   const second = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time: timePrevStep,
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
   });
   assert.equal(first.code, "911617");
   assert.equal(second.code, "911617");
@@ -327,7 +327,7 @@ test("timeBasedOneTimePassword - cannot re-use code - but two steps generate the
   const totpValidator = createTimeBasedOneTimePasswordValidator({
     key: testSecret,
     allowedTimeSteps: 2,
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
   });
   // Check the code works the first time, this claims 05:28:30 code
   assert.strictEqual(
@@ -351,7 +351,7 @@ test("timeBasedOneTimePasswordCode - numeric", async () => {
   const { code: code1 } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time: new Date("2026-10-27T11:59:00.000Z"),
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
   });
   assert.strictEqual(code1, knownCodes.h11m59s00);
 
@@ -359,7 +359,7 @@ test("timeBasedOneTimePasswordCode - numeric", async () => {
   const { code: code2 } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time: new Date("2026-10-27T11:59:30.000Z"),
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
   });
   assert.strictEqual(code2, knownCodes.h11m59s30);
 
@@ -367,7 +367,7 @@ test("timeBasedOneTimePasswordCode - numeric", async () => {
   const { code: code3 } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time: testTimeh12m00s00,
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
   });
   assert.strictEqual(code3, knownCodes.h12m00s00);
 
@@ -375,7 +375,7 @@ test("timeBasedOneTimePasswordCode - numeric", async () => {
   const { code: code4 } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     time: new Date("2026-10-27T12:00:30.000Z"),
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
   });
   assert.strictEqual(code4, knownCodes.h12m00s30);
 });
@@ -384,7 +384,7 @@ test("timeBasedOneTimePasswordCode - alphanumeric", async () => {
   const { code } = await timeBasedOneTimePasswordCode({
     key: testSecret,
     codeType: "alphanumeric",
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
     time: testTimeh12m00s00,
   });
   assert.strictEqual(code, "2MSUBE");
@@ -393,7 +393,7 @@ test("timeBasedOneTimePasswordCode - alphanumeric", async () => {
 test("timeBasedOneTimePasswordCode - defaults to current time if not provided", async () => {
   const { code } = await timeBasedOneTimePasswordCode({
     key: testSecret,
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
   });
   assert.strictEqual(typeof code, "string");
   assert.strictEqual(code.length, 6);
@@ -404,7 +404,7 @@ test("timeBasedOneTimePasswordCode - defaults to current time if not provided", 
 test("timeBasedOneTimePasswordCode - time beyond 2038", async () => {
   const { code } = await timeBasedOneTimePasswordCode({
     key: testSecret,
-    hashAlgorithm: "SHA-1",
+    hashAlgorithm: "SHA1",
     time: new Date("2040-10-27T12:00:00.000Z"),
   });
   assert.strictEqual(code, "713614");
@@ -487,7 +487,7 @@ test("timeBasedOneTimePasswordCode - validation", async () => {
   // hashAlgorithm
   await expectError(
     { hashAlgorithm: "SHA-3" as HashAlgorithm },
-    "Unsupported hash algorithm. Supported: SHA-1,SHA-256,SHA-512",
+    "Unsupported hash algorithm. Supported: SHA1,SHA256,SHA512",
   );
 });
 

@@ -15,7 +15,7 @@ export type HotpOptions = {
   /** What hash algorithm to use. */
   hashAlgorithm?: HashAlgorithm;
 };
-export const supportedHashAlgorithms = ["SHA-1", "SHA-256", "SHA-512"] as const;
+export const supportedHashAlgorithms = ["SHA1", "SHA256", "SHA512"] as const;
 export type HashAlgorithm = (typeof supportedHashAlgorithms)[number];
 export type CodeType = "numeric" | "alphanumeric";
 
@@ -128,7 +128,7 @@ function validateArgs(options: HotpOptions): Required<HotpOptions> {
     ...options,
     codeLength: options.codeLength ?? 6,
     codeType: options.codeType ?? "numeric",
-    hashAlgorithm: options.hashAlgorithm ?? "SHA-1",
+    hashAlgorithm: options.hashAlgorithm ?? "SHA1",
   };
 
   // Check key is at least 128 bits / 16 bytes.
@@ -173,6 +173,13 @@ function validateArgs(options: HotpOptions): Required<HotpOptions> {
   return validatedOptions;
 }
 
+// The otpauth URL uses the forms without dashes, while the Web Crypto APIs include dashes.
+// We've matched the otpauth decision for our API.
+const mapHashToWebCryptoNameAlgorithms: Record<HashAlgorithm, string> = {
+  SHA1: "SHA-1",
+  SHA256: "SHA-256",
+  SHA512: "SHA-512",
+};
 async function hmac(
   keyBytes: ArrayBuffer,
   counter: bigint,
@@ -183,7 +190,7 @@ async function hmac(
     keyBytes,
     {
       name: "HMAC",
-      hash,
+      hash: mapHashToWebCryptoNameAlgorithms[hash],
     },
     false,
     ["sign"],

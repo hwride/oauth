@@ -258,7 +258,7 @@ test("TOTP (RFC 6238) spec tests - SHA-1", async () => {
           key: totpSpecTestSecrets.sha1,
           counter: testValue.counter,
           codeLength: 8,
-          hashAlgorithm: "SHA-1",
+          hashAlgorithm: "SHA1",
         })
       ).code,
       testValue.sha1,
@@ -274,7 +274,7 @@ test("TOTP (RFC 6238) spec tests - SHA-256", async () => {
           key: totpSpecTestSecrets.sha256,
           counter: testValue.counter,
           codeLength: 8,
-          hashAlgorithm: "SHA-256",
+          hashAlgorithm: "SHA256",
         })
       ).code,
       testValue.sha256,
@@ -290,7 +290,7 @@ test("TOTP (RFC 6238) spec tests - SHA-512", async () => {
           key: totpSpecTestSecrets.sha512,
           counter: testValue.counter,
           codeLength: 8,
-          hashAlgorithm: "SHA-512",
+          hashAlgorithm: "SHA512",
         })
       ).code,
       testValue.sha512,

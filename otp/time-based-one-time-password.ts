@@ -127,7 +127,7 @@ export function createTimeBasedOneTimePasswordValidator(
   }
 
   // Check hash algorithm.
-  optionsGenCode.hashAlgorithm ??= "SHA-512";
+  optionsGenCode.hashAlgorithm ??= "SHA512";
   if (!supportedHashAlgorithms.includes(optionsGenCode.hashAlgorithm)) {
     throw new Error(
       `Unsupported hash algorithm. Supported: ${supportedHashAlgorithms}`,
@@ -215,7 +215,7 @@ export async function timeBasedOneTimePasswordCode(
 
   const hmacResults = await hmacOneTimePassword({
     ...options,
-    hashAlgorithm: options.hashAlgorithm ?? "SHA-512",
+    hashAlgorithm: options.hashAlgorithm ?? "SHA512",
     counter: BigInt(timeStepNum),
   });
 
