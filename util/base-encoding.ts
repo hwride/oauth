@@ -37,11 +37,21 @@ const base32Config: BaseConfig = {
   charBitLength: 5,
   numCharsPerGroup: 8,
 };
+const base32HexConfig: BaseConfig = {
+  ...base32Config,
+  name: "base32hex",
+  alphabet: "0123456789ABCDEFGHIJKLMNOPQRSTUV",
+};
 const base64Config: BaseConfig = {
   name: "base64",
   alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
   charBitLength: 6,
   numCharsPerGroup: 4,
+};
+const base64UrlConfig: BaseConfig = {
+  ...base64Config,
+  name: "base64url",
+  alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",
 };
 const padChar = "=";
 
@@ -82,6 +92,39 @@ export function isBase64(str: string): boolean {
 }
 
 /**
+ * Convert an array buffer to padded base64url.
+ */
+export function toBase64Url(buffer: ArrayBuffer) {
+  return toBaseGeneric({
+    ...base64UrlConfig,
+    buffer,
+  });
+}
+
+/**
+ * Convert a padded base64url string to an ArrayBuffer.
+ */
+export function fromBase64Url(base64UrlStr: string): ArrayBuffer {
+  return fromBaseGeneric({
+    ...base64UrlConfig,
+    baseStr: base64UrlStr,
+  });
+}
+
+/**
+ * Return whether a string is a valid padded base64url encoding.
+ */
+export function isBase64Url(str: string): boolean {
+  try {
+    fromBase64Url(str);
+    return true;
+  } catch (error) {
+    if (error instanceof BaseEncodingValidationError) return false;
+    throw error;
+  }
+}
+
+/**
  * Convert an array buffer to base32.
  */
 export function toBase32(buffer: ArrayBuffer) {
@@ -97,6 +140,26 @@ export function toBase32(buffer: ArrayBuffer) {
 export function fromBase32(base32Str: string): ArrayBuffer {
   return fromBaseGeneric({
     ...base32Config,
+    baseStr: base32Str,
+  });
+}
+
+/**
+ * Convert an array buffer to base32hex.
+ */
+export function toBase32Hex(buffer: ArrayBuffer) {
+  return toBaseGeneric({
+    ...base32HexConfig,
+    buffer,
+  });
+}
+
+/**
+ Convert a base 32 hex string to an ArrayBuffer.
+ */
+export function fromBase32Hex(base32Str: string) {
+  return fromBaseGeneric({
+    ...base32HexConfig,
     baseStr: base32Str,
   });
 }

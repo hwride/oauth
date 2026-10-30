@@ -3,48 +3,77 @@ import assert from "node:assert/strict";
 import {
   fromBase16,
   fromBase32,
+  fromBase32Hex,
   fromBase64,
+  fromBase64Url,
   isBase16,
   isBase32,
   isBase64,
+  isBase64Url,
   toBase16,
   toBase32,
+  toBase32Hex,
   toBase64,
+  toBase64Url,
 } from "./base-encoding.ts";
 
 const rfc4648TestVectors = [
   // The spec defines input as a string, so it will be the bits for the ASCII encoding of that string.
-  { binaryAsAscii: "", base16: "", base32: "", base64: "" },
-  { binaryAsAscii: "f", base16: "66", base32: "MY======", base64: "Zg==" },
+  {
+    binaryAsAscii: "",
+    base16: "",
+    base32: "",
+    base32hex: "",
+    base64: "",
+    base64Url: "",
+  },
+  {
+    binaryAsAscii: "f",
+    base16: "66",
+    base32: "MY======",
+    base32hex: "CO======",
+    base64: "Zg==",
+    base64Url: "Zg==",
+  },
   {
     binaryAsAscii: "fo",
     base16: "666F",
     base32: "MZXQ====",
+    base32hex: "CPNG====",
     base64: "Zm8=",
+    base64Url: "Zm8=",
   },
   {
     binaryAsAscii: "foo",
     base16: "666F6F",
     base32: "MZXW6===",
+    base32hex: "CPNMU===",
     base64: "Zm9v",
+    base64Url: "Zm9v",
   },
   {
     binaryAsAscii: "foob",
     base16: "666F6F62",
     base32: "MZXW6YQ=",
+    base32hex: "CPNMUOG=",
     base64: "Zm9vYg==",
+    base64Url: "Zm9vYg==",
   },
   {
     binaryAsAscii: "fooba",
     base16: "666F6F6261",
     base32: "MZXW6YTB",
+    base32hex: "CPNMUOJ1",
     base64: "Zm9vYmE=",
+    base64Url: "Zm9vYmE=",
   },
   {
     binaryAsAscii: "foobar",
     base16: "666F6F626172",
     base32: "MZXW6YTBOI======",
+    base32hex: "CPNMUOJ1E8======",
     base64: "Zm9vYmFy",
+    base64Url: "Zm9vYmFy",
   },
 ] as const;
 
@@ -88,6 +117,42 @@ test("isBase64 - invalid characters", () => {
   assert.strictEqual(isBase64("MMY@"), false);
 });
 
+// base64url
+for (const { binaryAsAscii, base64Url } of rfc4648TestVectors) {
+  test(`toBase64Url - input: ${binaryAsAscii}, expected: ${base64Url}`, () => {
+    const buffer = new TextEncoder().encode(binaryAsAscii).buffer;
+    assert.strictEqual(toBase64Url(buffer), base64Url);
+  });
+}
+
+for (const { binaryAsAscii, base64Url } of rfc4648TestVectors) {
+  test(`fromBase64Url - input: ${base64Url}, expected: ${binaryAsAscii}`, () => {
+    const expectedBuffer = new TextEncoder().encode(binaryAsAscii).buffer;
+    assert.deepStrictEqual(fromBase64Url(base64Url), expectedBuffer);
+  });
+}
+
+test("toBase64Url - uses URL-safe alphabet", () => {
+  const buffer = new Uint8Array([0xfb, 0xff, 0xff]).buffer;
+  assert.strictEqual(toBase64Url(buffer), "-___");
+});
+
+test("fromBase64Url - uses URL-safe alphabet", () => {
+  const expectedBuffer = new Uint8Array([0xfb, 0xff, 0xff]).buffer;
+  assert.deepStrictEqual(fromBase64Url("-___"), expectedBuffer);
+});
+
+test("isBase64Url - valid", () => {
+  assert.strictEqual(isBase64Url("-w=="), true);
+  assert.strictEqual(isBase64Url("_w=="), true);
+  assert.strictEqual(isBase64Url("-_8="), true);
+});
+
+test("isBase64Url - rejects standard Base64 characters", () => {
+  assert.strictEqual(isBase64Url("+w=="), false);
+  assert.strictEqual(isBase64Url("/w=="), false);
+});
+
 // bass 32
 for (const { binaryAsAscii, base32 } of rfc4648TestVectors) {
   test(`toBase32 - input: ${binaryAsAscii}, expected: ${base32}`, () => {
@@ -101,6 +166,20 @@ for (const { binaryAsAscii, base32 } of rfc4648TestVectors) {
   test(`fromBase32 - input: ${base32}, expected: ${binaryAsAscii}`, () => {
     const expectedBuffer = new TextEncoder().encode(binaryAsAscii).buffer;
     assert.deepStrictEqual(fromBase32(base32), expectedBuffer);
+  });
+}
+
+for (const { binaryAsAscii, base32hex } of rfc4648TestVectors) {
+  test(`toBase32Hex - input: ${binaryAsAscii}, expected: ${base32hex}`, () => {
+    const buffer = new TextEncoder().encode(binaryAsAscii).buffer;
+    assert.strictEqual(toBase32Hex(buffer), base32hex);
+  });
+}
+
+for (const { binaryAsAscii, base32hex } of rfc4648TestVectors) {
+  test(`fromBase32Hex - input: ${base32hex}, expected: ${binaryAsAscii}`, () => {
+    const expectedBuffer = new TextEncoder().encode(binaryAsAscii).buffer;
+    assert.deepStrictEqual(fromBase32Hex(base32hex), expectedBuffer);
   });
 }
 
