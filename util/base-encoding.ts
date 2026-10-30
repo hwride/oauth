@@ -48,6 +48,11 @@ const base64Config: BaseConfig = {
   charBitLength: 6,
   numCharsPerGroup: 4,
 };
+const base64UrlConfig: BaseConfig = {
+  ...base64Config,
+  name: "base64url",
+  alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",
+};
 const padChar = "=";
 
 /** Error thrown when a base-encoded string fails validation. */
@@ -79,6 +84,39 @@ export function fromBase64(base64Str: string): ArrayBuffer {
 export function isBase64(str: string): boolean {
   try {
     fromBase64(str);
+    return true;
+  } catch (error) {
+    if (error instanceof BaseEncodingValidationError) return false;
+    throw error;
+  }
+}
+
+/**
+ * Convert an array buffer to padded base64url.
+ */
+export function toBase64Url(buffer: ArrayBuffer) {
+  return toBaseGeneric({
+    ...base64UrlConfig,
+    buffer,
+  });
+}
+
+/**
+ * Convert a padded base64url string to an ArrayBuffer.
+ */
+export function fromBase64Url(base64UrlStr: string): ArrayBuffer {
+  return fromBaseGeneric({
+    ...base64UrlConfig,
+    baseStr: base64UrlStr,
+  });
+}
+
+/**
+ * Return whether a string is a valid padded base64url encoding.
+ */
+export function isBase64Url(str: string): boolean {
+  try {
+    fromBase64Url(str);
     return true;
   } catch (error) {
     if (error instanceof BaseEncodingValidationError) return false;

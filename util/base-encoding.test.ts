@@ -5,13 +5,16 @@ import {
   fromBase32,
   fromBase32Hex,
   fromBase64,
+  fromBase64Url,
   isBase16,
   isBase32,
   isBase64,
+  isBase64Url,
   toBase16,
   toBase32,
   toBase32Hex,
   toBase64,
+  toBase64Url,
 } from "./base-encoding.ts";
 
 const rfc4648TestVectors = [
@@ -22,6 +25,7 @@ const rfc4648TestVectors = [
     base32: "",
     base32hex: "",
     base64: "",
+    base64Url: "",
   },
   {
     binaryAsAscii: "f",
@@ -29,6 +33,7 @@ const rfc4648TestVectors = [
     base32: "MY======",
     base32hex: "CO======",
     base64: "Zg==",
+    base64Url: "Zg==",
   },
   {
     binaryAsAscii: "fo",
@@ -36,6 +41,7 @@ const rfc4648TestVectors = [
     base32: "MZXQ====",
     base32hex: "CPNG====",
     base64: "Zm8=",
+    base64Url: "Zm8=",
   },
   {
     binaryAsAscii: "foo",
@@ -43,6 +49,7 @@ const rfc4648TestVectors = [
     base32: "MZXW6===",
     base32hex: "CPNMU===",
     base64: "Zm9v",
+    base64Url: "Zm9v",
   },
   {
     binaryAsAscii: "foob",
@@ -50,6 +57,7 @@ const rfc4648TestVectors = [
     base32: "MZXW6YQ=",
     base32hex: "CPNMUOG=",
     base64: "Zm9vYg==",
+    base64Url: "Zm9vYg==",
   },
   {
     binaryAsAscii: "fooba",
@@ -57,6 +65,7 @@ const rfc4648TestVectors = [
     base32: "MZXW6YTB",
     base32hex: "CPNMUOJ1",
     base64: "Zm9vYmE=",
+    base64Url: "Zm9vYmE=",
   },
   {
     binaryAsAscii: "foobar",
@@ -64,6 +73,7 @@ const rfc4648TestVectors = [
     base32: "MZXW6YTBOI======",
     base32hex: "CPNMUOJ1E8======",
     base64: "Zm9vYmFy",
+    base64Url: "Zm9vYmFy",
   },
 ] as const;
 
@@ -107,6 +117,42 @@ test("isBase64 - invalid characters", () => {
   assert.strictEqual(isBase64("MMY@"), false);
 });
 
+// base64url
+for (const { binaryAsAscii, base64Url } of rfc4648TestVectors) {
+  test(`toBase64Url - input: ${binaryAsAscii}, expected: ${base64Url}`, () => {
+    const buffer = new TextEncoder().encode(binaryAsAscii).buffer;
+    assert.strictEqual(toBase64Url(buffer), base64Url);
+  });
+}
+
+for (const { binaryAsAscii, base64Url } of rfc4648TestVectors) {
+  test(`fromBase64Url - input: ${base64Url}, expected: ${binaryAsAscii}`, () => {
+    const expectedBuffer = new TextEncoder().encode(binaryAsAscii).buffer;
+    assert.deepStrictEqual(fromBase64Url(base64Url), expectedBuffer);
+  });
+}
+
+test("toBase64Url - uses URL-safe alphabet", () => {
+  const buffer = new Uint8Array([0xfb, 0xff, 0xff]).buffer;
+  assert.strictEqual(toBase64Url(buffer), "-___");
+});
+
+test("fromBase64Url - uses URL-safe alphabet", () => {
+  const expectedBuffer = new Uint8Array([0xfb, 0xff, 0xff]).buffer;
+  assert.deepStrictEqual(fromBase64Url("-___"), expectedBuffer);
+});
+
+test("isBase64Url - valid", () => {
+  assert.strictEqual(isBase64Url("-w=="), true);
+  assert.strictEqual(isBase64Url("_w=="), true);
+  assert.strictEqual(isBase64Url("-_8="), true);
+});
+
+test("isBase64Url - rejects standard Base64 characters", () => {
+  assert.strictEqual(isBase64Url("+w=="), false);
+  assert.strictEqual(isBase64Url("/w=="), false);
+});
+
 // bass 32
 for (const { binaryAsAscii, base32 } of rfc4648TestVectors) {
   test(`toBase32 - input: ${binaryAsAscii}, expected: ${base32}`, () => {
@@ -131,13 +177,10 @@ for (const { binaryAsAscii, base32hex } of rfc4648TestVectors) {
 }
 
 for (const { binaryAsAscii, base32hex } of rfc4648TestVectors) {
-  test(
-    `fromBase32Hex - input: ${base32hex}, expected: ${binaryAsAscii}`,
-    () => {
-      const expectedBuffer = new TextEncoder().encode(binaryAsAscii).buffer;
-      assert.deepStrictEqual(fromBase32Hex(base32hex), expectedBuffer);
-    },
-  );
+  test(`fromBase32Hex - input: ${base32hex}, expected: ${binaryAsAscii}`, () => {
+    const expectedBuffer = new TextEncoder().encode(binaryAsAscii).buffer;
+    assert.deepStrictEqual(fromBase32Hex(base32hex), expectedBuffer);
+  });
 }
 
 test("fromBase32 - does not accept lowercase", () => {
