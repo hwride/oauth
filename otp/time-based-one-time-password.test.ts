@@ -207,15 +207,15 @@ test("TOTP (RFC 6238) spec tests - SHA-512", async () => {
   }
 });
 
-test("TOTP defaults to SHA-512", async () => {
+test("TOTP defaults to SHA-1", async () => {
   const testValue = totpSpecTestValues[0];
   const { code } = await timeBasedOneTimePasswordCode({
-    key: totpSpecTestSecrets.sha512,
+    key: totpSpecTestSecrets.sha1,
     time: new Date(testValue.unixTime * 1000),
     codeLength: 8,
   });
 
-  assert.equal(code, testValue.sha512);
+  assert.equal(code, testValue.sha1);
 });
 
 test("timeBasedOneTimePassword - 2 allowed time steps", async () => {

@@ -8,6 +8,7 @@ import { registerJwksRoute } from "./routes/jwks-route.ts";
 import { registerOpenIdConfigurationRoute } from "./routes/openid-configuration-route.ts";
 import { registerSignupRoute } from "./routes/signup-route.ts";
 import { registerTokenRoute } from "./routes/token-route.ts";
+import { registerTotpRegistrationRoute } from "./routes/totp-registration-route.ts";
 import { registerUserinfoRoute } from "./routes/userinfo-route.ts";
 import {
   createAuthorizationCodeStore,
@@ -84,6 +85,7 @@ export async function createServer(
     resolvedRefreshTokenStore,
     userStore,
   );
+  registerTotpRegistrationRoute(fastify);
   registerJwksRoute(fastify, resolvedServerConfig);
   registerUserinfoRoute(fastify, resolvedServerConfig, userStore);
 
@@ -106,6 +108,7 @@ function logAuthorizationServerConfig(
       clients: clientsConfig.map(function (client) {
         return {
           clientId: client.clientId,
+          requiresMfa: client.requiresMfa ?? false,
           clientAuthMethod: client.clientAuthMethod,
           clientSecret:
             "clientSecret" in client && client.clientSecret
