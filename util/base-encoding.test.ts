@@ -4,9 +4,9 @@ import {
   fromBase16,
   fromBase32,
   fromBase64,
-  isBase16Like,
-  isBase32Like,
-  isBase64Like,
+  isBase16,
+  isBase32,
+  isBase64,
   toBase16,
   toBase32,
   toBase64,
@@ -64,15 +64,28 @@ for (const { binaryAsAscii, base64 } of rfc4648TestVectors) {
   });
 }
 
+test("fromBase64 - rejects non-zero pad bits", () => {
+  assert.throws(() => fromBase64("Zh=="));
+});
+
+// Ensures our non-zero pad bits doesn't accidentally reject all 0s
+test("fromBase64 - accepts zero-valued final symbol", () => {
+  assert.deepStrictEqual(fromBase64("AA=="), new Uint8Array([0]).buffer);
+});
+
+test("fromBase64 - rejects zero bits without a complete byte", () => {
+  assert.throws(() => fromBase64("A==="), /Invalid base64 encoding/);
+});
+
 test("isBase64 - valid", () => {
-  assert.strictEqual(isBase64Like(""), true);
-  assert.strictEqual(isBase64Like("Zm8="), true);
-  assert.strictEqual(isBase64Like("Zm9v"), true);
+  assert.strictEqual(isBase64(""), true);
+  assert.strictEqual(isBase64("Zm8="), true);
+  assert.strictEqual(isBase64("Zm9v"), true);
 });
 
 test("isBase64 - invalid characters", () => {
-  assert.strictEqual(isBase64Like("MMY´"), false);
-  assert.strictEqual(isBase64Like("MMY@"), false);
+  assert.strictEqual(isBase64("MMY´"), false);
+  assert.strictEqual(isBase64("MMY@"), false);
 });
 
 // bass 32
@@ -94,37 +107,49 @@ for (const { binaryAsAscii, base32 } of rfc4648TestVectors) {
 test("fromBase32 - does not accept lowercase", () => {
   assert.throws(
     () => fromBase32(rfc4648TestVectors[4].base32.toLowerCase()),
-    /String is not valid base32/,
+    /Invalid base32 encoding/,
   );
 });
 
+test("fromBase32 - rejects non-zero pad bits", () => {
+  assert.throws(() => fromBase32("MZ======"));
+});
+
+test("fromBase32 - accepts zero-valued final symbol", () => {
+  assert.deepStrictEqual(fromBase32("AA======"), new Uint8Array([0]).buffer);
+});
+
+test("fromBase32 - rejects zero bits without a complete byte", () => {
+  assert.throws(() => fromBase32("A======="), /Invalid base32 encoding/);
+});
+
 test("isBase32 - valid", () => {
-  assert.strictEqual(isBase32Like(""), true);
-  assert.strictEqual(isBase32Like("MY======"), true);
-  assert.strictEqual(isBase32Like("MZXW6YTB"), true);
+  assert.strictEqual(isBase32(""), true);
+  assert.strictEqual(isBase32("MY======"), true);
+  assert.strictEqual(isBase32("MZXW6YTB"), true);
 });
 
 test("isBase32 - invalid characters", () => {
-  assert.strictEqual(isBase32Like("MMMMMMY´"), false);
-  assert.strictEqual(isBase32Like("MMMMMMY@"), false);
+  assert.strictEqual(isBase32("MMMMMMY´"), false);
+  assert.strictEqual(isBase32("MMMMMMY@"), false);
 });
 
 test("isBase32 - padding must only be at the end", () => {
-  assert.strictEqual(isBase32Like("=ABC"), false);
-  assert.strictEqual(isBase32Like("A=BC"), false);
-  assert.strictEqual(isBase32Like("M=Y====="), false);
+  assert.strictEqual(isBase32("=ABC"), false);
+  assert.strictEqual(isBase32("A=BC"), false);
+  assert.strictEqual(isBase32("M=Y====="), false);
 });
 
 test("isBase32 - invalid padding", () => {
-  assert.strictEqual(isBase32Like("="), false);
-  assert.strictEqual(isBase32Like("A="), false);
-  assert.strictEqual(isBase32Like("MZXW6YTB="), false);
-  assert.strictEqual(isBase32Like("MY======="), false);
+  assert.strictEqual(isBase32("="), false);
+  assert.strictEqual(isBase32("A="), false);
+  assert.strictEqual(isBase32("MZXW6YTB="), false);
+  assert.strictEqual(isBase32("MY======="), false);
 });
 
 test("isBase32 - invalid unpadded lengths", () => {
-  assert.strictEqual(isBase32Like("A"), false);
-  assert.strictEqual(isBase32Like("ABC"), false);
+  assert.strictEqual(isBase32("A"), false);
+  assert.strictEqual(isBase32("ABC"), false);
 });
 
 // bass 16
@@ -148,12 +173,12 @@ test("fromBase16 - rejects odd-length input", () => {
 });
 
 test("isBase16 - valid", () => {
-  assert.strictEqual(isBase16Like(""), true);
-  assert.strictEqual(isBase16Like(rfc4648TestVectors[0].base16), true);
-  assert.strictEqual(isBase16Like(rfc4648TestVectors[1].base16), true);
+  assert.strictEqual(isBase16(""), true);
+  assert.strictEqual(isBase16(rfc4648TestVectors[0].base16), true);
+  assert.strictEqual(isBase16(rfc4648TestVectors[1].base16), true);
 });
 
 test("isBase16 - invalid characters", () => {
-  assert.strictEqual(isBase16Like("MMY´"), false);
-  assert.strictEqual(isBase16Like("MMY@"), false);
+  assert.strictEqual(isBase16("MMY´"), false);
+  assert.strictEqual(isBase16("MMY@"), false);
 });
