@@ -37,6 +37,11 @@ const base32Config: BaseConfig = {
   charBitLength: 5,
   numCharsPerGroup: 8,
 };
+const base32HexConfig: BaseConfig = {
+  ...base32Config,
+  name: "base32hex",
+  alphabet: "0123456789ABCDEFGHIJKLMNOPQRSTUV",
+};
 const base64Config: BaseConfig = {
   name: "base64",
   alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
@@ -97,6 +102,26 @@ export function toBase32(buffer: ArrayBuffer) {
 export function fromBase32(base32Str: string): ArrayBuffer {
   return fromBaseGeneric({
     ...base32Config,
+    baseStr: base32Str,
+  });
+}
+
+/**
+ * Convert an array buffer to base32hex.
+ */
+export function toBase32Hex(buffer: ArrayBuffer) {
+  return toBaseGeneric({
+    ...base32HexConfig,
+    buffer,
+  });
+}
+
+/**
+ Convert a base 32 hex string to an ArrayBuffer.
+ */
+export function fromBase32Hex(base32Str: string) {
+  return fromBaseGeneric({
+    ...base32HexConfig,
     baseStr: base32Str,
   });
 }
