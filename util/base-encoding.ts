@@ -45,6 +45,9 @@ const base64Config: BaseConfig = {
 };
 const padChar = "=";
 
+/** Error thrown when a base-encoded string fails validation. */
+class BaseEncodingValidationError extends Error {}
+
 /**
  * Convert an array buffer to base64.
  */
@@ -66,13 +69,16 @@ export function fromBase64(base64Str: string): ArrayBuffer {
 }
 
 /**
- * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
+ * Return whether a string is a valid base64 encoding.
  */
-export function isBase64Like(str: string): boolean {
-  return isBaseLikeGeneric({
-    ...base64Config,
-    str,
-  });
+export function isBase64(str: string): boolean {
+  try {
+    fromBase64(str);
+    return true;
+  } catch (error) {
+    if (error instanceof BaseEncodingValidationError) return false;
+    throw error;
+  }
 }
 
 /**
@@ -96,13 +102,16 @@ export function fromBase32(base32Str: string): ArrayBuffer {
 }
 
 /**
- * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
+ * Return whether a string is a valid base32 encoding.
  */
-export function isBase32Like(str: string): boolean {
-  return isBaseLikeGeneric({
-    ...base32Config,
-    str,
-  });
+export function isBase32(str: string): boolean {
+  try {
+    fromBase32(str);
+    return true;
+  } catch (error) {
+    if (error instanceof BaseEncodingValidationError) return false;
+    throw error;
+  }
 }
 
 /**
@@ -126,13 +135,16 @@ export function fromBase16(base16Str: string): ArrayBuffer {
 }
 
 /**
- * Return whether a string is like a base32 string. It does not guarantee it is completely correct encoding.
+ * Return whether a string is a valid base16 encoding.
  */
-export function isBase16Like(str: string): boolean {
-  return isBaseLikeGeneric({
-    ...base16Config,
-    str,
-  });
+export function isBase16(str: string): boolean {
+  try {
+    fromBase16(str);
+    return true;
+  } catch (error) {
+    if (error instanceof BaseEncodingValidationError) return false;
+    throw error;
+  }
 }
 
 /**
@@ -205,7 +217,7 @@ export function fromBaseGeneric(
   }
 
   if (!isBaseLikeGeneric({ ...opts, str: baseStr })) {
-    throw new Error(`String is not valid ${opts.name}`);
+    throw new BaseEncodingValidationError(`Invalid ${opts.name} encoding`);
   }
 
   // Reverse alphabet lookup
@@ -215,7 +227,10 @@ export function fromBaseGeneric(
   }
 
   let binaryStr = "";
-  for (const char of baseStr) {
+  let currentGroupBinaryStrs = [];
+  for (let i = 0; i < baseStr.length; i++) {
+    const char = baseStr[i];
+
     // If we're at padding characters we are finished.
     if (char === "=") {
       break;
@@ -229,6 +244,61 @@ export function fromBaseGeneric(
       charBinary.length,
     );
     binaryStr += charBinaryClampedToBits;
+
+    // If this is the final character, check pad bits are correct.
+    /*
+      We always assume base encoding will be passed full byte or multiples of 8 bits.
+      Each character for base 64 encodes 6 bits. Two of these characters would be 12 bits.
+      This means the maximum real bits that can be encoded in that is 8 bits, because 16 bits would require 3 characters.
+      So, for two base 64 characters, we expect all bits beyond 8 to be 0 padded.
+      If any non-zero bits are there, this is not a valid base 64 encoding.
+
+      base 64 - 6 bits per char, 24-bit groups
+      possible pad chars: 2, 1, 0
+      final char max bits calc = max bit total - (total chars - 1)*bits per char
+      F=== : chars = 6  bits, 3 pad chars, impossible
+      FF== : chars = 12 bits, 2 pad chars, max 8  bits total, final char max 2 bits (8 - 1*6 = 2)
+      FFF= : chars = 18 bits, 1 pad chars, max 16 bits total, final char max 4 bits (16 - 2*6 = 4)
+      FFFF : 0 pad chars - no check needed
+
+      base 32 - 5 bits per char, 40-bit groups
+      possible pad chars: 6, 4, 3, 1
+      F======= : chars = 5 bits, impossible
+      FF====== : chars = 10 bits, 6 pad chars, max 8  bits total, final char max 3 bits (8 - 1*5 = 3)
+      FFF===== : chars = 15 bits, 5 pad chars, max 8  bits total, impossible would fit above
+      FFFF==== : chars = 20 bits, 4 pad chars, max 16 bits total, final char max 1 bit  (16 - 3*5 = 1)
+      FFFFF=== : chars = 25 bits, 3 pad chars, max 24 bits total, final char max 4 bits (24 - 4*5 = 4)
+      FFFFFF== : chars = 30 bits, 2 pad chars, max 24 bits total, impossible would fit above
+      FFFFFFF= : chars = 35 bits, 1 pad chars, max 32 bits total, final char max 2 bits (32 - 6*5 = 2)
+      FFFFFFFF : 0 pad bits - no check needed
+
+      base 16 - 4 bits per char, 2-bit groups
+      Never has padding bits, no checks needed.
+     */
+    if (currentGroupBinaryStrs.length === opts.numCharsPerGroup) {
+      currentGroupBinaryStrs = [];
+    }
+    currentGroupBinaryStrs.push(charBinaryClampedToBits);
+    const isFinalCharAndPaddingNext =
+      i < baseStr.length - 1 && baseStr[i + 1] === "=";
+    if (isFinalCharAndPaddingNext) {
+      // Work out max real bits we can have in this group.
+      const charsInGroup = currentGroupBinaryStrs.length;
+      const charBitsInGroup = charsInGroup * opts.charBitLength;
+      const maxRealBits = charBitsInGroup - (charBitsInGroup % 8);
+      const finalCharMaxBits =
+        maxRealBits - (charsInGroup - 1) * opts.charBitLength;
+      const finalCharBinaryStr =
+        currentGroupBinaryStrs[currentGroupBinaryStrs.length - 1];
+      const finalChar0EndBits = finalCharBinaryStr.match(/(0*)$/)[1];
+      const finalCharNon0BitLength =
+        finalCharBinaryStr.length - finalChar0EndBits.length;
+      if (finalCharNon0BitLength > finalCharMaxBits) {
+        throw new BaseEncodingValidationError(
+          `Invalid ${opts.name} encoding: non-zero pad bits`,
+        );
+      }
+    }
   }
 
   // Make sure binary string is a multiple of 8 bits.
@@ -238,6 +308,14 @@ export function fromBaseGeneric(
     binaryStr8Remainder === 0
       ? binaryStr
       : binaryStr.slice(0, -binaryStr8Remainder);
+
+  // A non-empty encoded string must decode to at least one complete byte.
+  // If clamping removes all bits, the input contains fewer than 8 data bits.
+  if (binaryStrClamped.length === 0) {
+    throw new BaseEncodingValidationError(
+      `Invalid ${opts.name} encoding: less than one byte`,
+    );
+  }
 
   const buffer = binaryToArrayBuffer(binaryStrClamped);
   return buffer;
