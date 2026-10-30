@@ -17,7 +17,7 @@ type TotpOptionsShared = {
    * and between 4 and 6 for alphanumeric codes.
    */
   codeLength?: number;
-  /** Default to SHA-512 if unspecified. */
+  /** Default to SHA-1 if unspecified. */
   hashAlgorithm?: HashAlgorithm;
 };
 
@@ -127,7 +127,7 @@ export function createTimeBasedOneTimePasswordValidator(
   }
 
   // Check hash algorithm.
-  optionsGenCode.hashAlgorithm ??= "SHA512";
+  optionsGenCode.hashAlgorithm ??= "SHA1";
   if (!supportedHashAlgorithms.includes(optionsGenCode.hashAlgorithm)) {
     throw new Error(
       `Unsupported hash algorithm. Supported: ${supportedHashAlgorithms}`,
@@ -215,7 +215,7 @@ export async function timeBasedOneTimePasswordCode(
 
   const hmacResults = await hmacOneTimePassword({
     ...options,
-    hashAlgorithm: options.hashAlgorithm ?? "SHA512",
+    hashAlgorithm: options.hashAlgorithm ?? "SHA1",
     counter: BigInt(timeStepNum),
   });
 
