@@ -146,6 +146,7 @@ async function fetchSignupPage(
 ) {
   const fastify = await createServer(
     serverConfig,
+    undefined,
     createAuthorizationCodeStore(),
   );
   const address = await fastify.listen({
@@ -170,6 +171,7 @@ async function submitSignupForm(
 ) {
   const fastify = await createServer(
     serverConfig,
+    undefined,
     createAuthorizationCodeStore(),
     undefined,
     userStore,

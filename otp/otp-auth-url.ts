@@ -23,7 +23,7 @@ type OtpAuthUrlOptionsShared = {
   /** The account name, e.g. test@example.com. */
   accountName: string;
   /** A secret value encoded in Base32. Secrets should be at least 160 bits. */
-  secret: string;
+  secretBase32: string;
   /** Algorithm used to generate OTPs. */
   algorithm?: "SHA1" | "SHA256" | "SHA512";
   /** How many digits this OTP uses. Default is 6. */
@@ -53,7 +53,7 @@ export function otpAuthUrl(options: OtpAuthUrlOptions): string {
   };
 
   setOptionalParamHelper("issuer");
-  setOptionalParamHelper("secret");
+  setOptionalParamHelper("secretBase32");
   setOptionalParamHelper("algorithm");
   setOptionalParamHelper("digits");
 

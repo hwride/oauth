@@ -8,7 +8,12 @@ import {
 } from "../config/resources-config.ts";
 import type { ServerConfig } from "../config/server-config.ts";
 import type { AuthorizationCodeStore } from "../stores/authorization-code-store.ts";
+import { type PendingAuthorizationStore } from "../stores/pending-authorization-store.ts";
 import type { UserRecord, UserStore } from "../stores/user-store.ts";
+import type {
+  AuthorizationRequest,
+  AuthorizationRequestError,
+} from "../types/authorization-request.ts";
 import { getAllowedScopesForUser } from "../utils/rbac-utils.ts";
 
 type AuthorizeQueryParams = {
@@ -26,6 +31,7 @@ type AuthorizeQueryParams = {
 export function registerAuthorizationRoute(
   fastify: FastifyInstance,
   serverConfig: ServerConfig,
+  pendingAuthorizationStore: PendingAuthorizationStore,
   authorizationCodeStore: AuthorizationCodeStore,
   userStore: UserStore,
 ) {
@@ -36,16 +42,21 @@ export function registerAuthorizationRoute(
   fastify.get<{
     Querystring: AuthorizeQueryParams;
   }>(authorizationEndpointPath, async function (request, reply) {
-    const authorizationRequest = validateAuthorizationRequest(request.query);
-    if ("error" in authorizationRequest) {
+    const validationResult = validateAuthorizationRequest(request.query);
+    if (validationResult.ok === false) {
       return reply
-        .code(authorizationRequest.statusCode)
-        .send(authorizationRequest.error);
+        .code(validationResult.authorizationError.statusCode)
+        .send(validationResult.authorizationError.error);
     }
 
     return reply
       .type("text/html; charset=utf-8")
-      .send(renderLoginPage(authorizationEndpointPath, authorizationRequest));
+      .send(
+        renderLoginPage(
+          authorizationEndpointPath,
+          validationResult.authorizationRequest,
+        ),
+      );
   });
 
   // Endpoint to submit login form to if login is required.
@@ -55,12 +66,13 @@ export function registerAuthorizationRoute(
       password?: string;
     };
   }>(authorizationEndpointPath, async function (request, reply) {
-    const authorizationRequest = validateAuthorizationRequest(request.body);
-    if ("error" in authorizationRequest) {
+    const validationResult = validateAuthorizationRequest(request.body);
+    if (validationResult.ok === false) {
       return reply
-        .code(authorizationRequest.statusCode)
-        .send(authorizationRequest.error);
+        .code(validationResult.authorizationError.statusCode)
+        .send(validationResult.authorizationError.error);
     }
+    const { authorizationRequest, clientConfig } = validationResult;
 
     const user = authenticateUser(
       userStore,
@@ -80,6 +92,20 @@ export function registerAuthorizationRoute(
         );
     }
 
+    // Challenge MFA if required.
+    if (clientConfig.requiresMfa) {
+      // Save the pending authorization request in our store against a transaction ID.
+      // Then when an MFA challenge is made, we can ensure it must match the correct transaction.
+      const transactionId = randomUUID();
+      pendingAuthorizationStore.savePendingAuthorization(transactionId, {
+        authorizationRequest,
+        subject: user.userId,
+        expiresAt:
+          Date.now() + serverConfig.mfaTransactionLifetimeSeconds * 1000,
+      });
+      return reply.redirect(`/mfa-challenge-totp?tx=${transactionId}`);
+    }
+
     return reply.redirect(
       createAuthorizationRedirectUrl(
         serverConfig,
@@ -91,21 +117,16 @@ export function registerAuthorizationRoute(
   });
 }
 
-type AuthorizationRequest = {
-  clientConfig: ClientConfig;
-  redirectUri: string;
-  responseType: string;
-  scope?: string;
-  nonce?: string;
-  state?: string;
-  codeChallenge?: string;
-  codeChallengeMethod?: "plain" | "S256";
-  resource?: SupportedResource;
-};
-type AuthorizationRequestError = {
-  statusCode: number;
-  error: { error: string; error_description?: string };
-};
+type AuthorizationRequestValidationResult =
+  | {
+      ok: true;
+      authorizationRequest: AuthorizationRequest;
+      clientConfig: ClientConfig;
+    }
+  | {
+      ok: false;
+      authorizationError: AuthorizationRequestError;
+    };
 
 const unrestrictedScopes = new Set([
   "openid",
@@ -118,16 +139,19 @@ const unrestrictedScopes = new Set([
 
 function validateAuthorizationRequest(
   input: AuthorizeQueryParams,
-): AuthorizationRequest | AuthorizationRequestError {
+): AuthorizationRequestValidationResult {
   // Check for valid input.
   // OAuth 2.0, Authorization Response, Error Response
   // https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
   if (!input.redirect_uri) {
     return {
-      statusCode: 400,
-      error: {
-        error: "invalid_request",
-        error_description: "Missing redirect_uri",
+      ok: false,
+      authorizationError: {
+        statusCode: 400,
+        error: {
+          error: "invalid_request",
+          error_description: "Missing redirect_uri",
+        },
       },
     };
   }
@@ -138,10 +162,13 @@ function validateAuthorizationRequest(
   });
   if (!clientConfig) {
     return {
-      statusCode: 400,
-      error: {
-        error: "invalid_request",
-        error_description: "Invalid client_id",
+      ok: false,
+      authorizationError: {
+        statusCode: 400,
+        error: {
+          error: "invalid_request",
+          error_description: "Invalid client_id",
+        },
       },
     };
   }
@@ -149,10 +176,13 @@ function validateAuthorizationRequest(
   // Check for matching redirect URI.
   if (!clientConfig.redirectUris.includes(input.redirect_uri)) {
     return {
-      statusCode: 400,
-      error: {
-        error: "invalid_request",
-        error_description: "Invalid redirect_uri",
+      ok: false,
+      authorizationError: {
+        statusCode: 400,
+        error: {
+          error: "invalid_request",
+          error_description: "Invalid redirect_uri",
+        },
       },
     };
   }
@@ -160,9 +190,12 @@ function validateAuthorizationRequest(
   // Check for supported grant type.
   if (input.response_type !== "code") {
     return {
-      statusCode: 400,
-      error: {
-        error: "unsupported_response_type",
+      ok: false,
+      authorizationError: {
+        statusCode: 400,
+        error: {
+          error: "unsupported_response_type",
+        },
       },
     };
   }
@@ -170,13 +203,16 @@ function validateAuthorizationRequest(
   let requestedResource: SupportedResource | undefined;
   if (input.resource) {
     if (!isSupportedResource(input.resource)) {
-      return createInvalidTargetError();
+      return {
+        ok: false,
+        authorizationError: createInvalidTargetError(),
+      };
     }
     requestedResource = input.resource;
   }
 
   const successResponse: AuthorizationRequest = {
-    clientConfig,
+    clientId: clientConfig.clientId,
     redirectUri: input.redirect_uri,
     responseType: input.response_type,
     scope: input.scope,
@@ -192,10 +228,13 @@ function validateAuthorizationRequest(
       !["plain", "S256"].includes(input.code_challenge_method)
     ) {
       return {
-        statusCode: 400,
-        error: {
-          error: "invalid_request",
-          error_description: "Unsupported code_challenge_method",
+        ok: false,
+        authorizationError: {
+          statusCode: 400,
+          error: {
+            error: "invalid_request",
+            error_description: "Unsupported code_challenge_method",
+          },
         },
       };
     }
@@ -205,7 +244,11 @@ function validateAuthorizationRequest(
       input.code_challenge_method === "S256" ? "S256" : "plain";
   }
 
-  return successResponse;
+  return {
+    ok: true,
+    authorizationRequest: successResponse,
+    clientConfig,
+  };
 }
 
 function renderLoginPage(
@@ -217,12 +260,12 @@ function renderLoginPage(
     ? `<p>${escapeHtml(errorMessage)}</p>`
     : "";
   const signupPathSearchParams = new URLSearchParams({
-    client_id: authorizationRequest.clientConfig.clientId,
+    client_id: authorizationRequest.clientId,
     response_type: authorizationRequest.responseType,
     redirect_uri: authorizationRequest.redirectUri,
   });
   const setIfExists = (
-    sourceKey: Exclude<keyof AuthorizationRequest, "clientConfig">,
+    sourceKey: Exclude<keyof AuthorizationRequest, "clientId">,
     targetKey: string,
   ) => {
     if (authorizationRequest[sourceKey]) {
@@ -245,10 +288,10 @@ function renderLoginPage(
   </head>
   <body>
     <h1>Login</h1>
-    <p>Sign in to continue for client ${escapeHtml(authorizationRequest.clientConfig.clientId)}.</p>
+    <p>Sign in to continue for client ${escapeHtml(authorizationRequest.clientId)}.</p>
     ${escapedErrorMessage}
     <form method="post" action="${escapeHtml(authorizationEndpointPath)}">
-      <input type="hidden" name="client_id" value="${escapeHtml(authorizationRequest.clientConfig.clientId)}">
+      <input type="hidden" name="client_id" value="${escapeHtml(authorizationRequest.clientId)}">
       <input type="hidden" name="response_type" value="${escapeHtml(authorizationRequest.responseType)}">
       <input type="hidden" name="redirect_uri" value="${escapeHtml(authorizationRequest.redirectUri)}">
       <input type="hidden" name="scope" value="${escapeHtml(authorizationRequest.scope ?? "")}">
@@ -288,7 +331,7 @@ function authenticateUser(
   return user;
 }
 
-function createAuthorizationRedirectUrl(
+export function createAuthorizationRedirectUrl(
   serverConfig: ServerConfig,
   authorizationCodeStore: AuthorizationCodeStore,
   authorizationRequest: AuthorizationRequest,
@@ -296,7 +339,7 @@ function createAuthorizationRedirectUrl(
 ) {
   const code = randomUUID();
   authorizationCodeStore.saveAuthorizationCode(code, {
-    clientId: authorizationRequest.clientConfig.clientId,
+    clientId: authorizationRequest.clientId,
     subject: user.userId,
     redirectUri: authorizationRequest.redirectUri,
     scope: filterAllowedScopes(
