@@ -21,6 +21,7 @@ test("authorization code can be issued and exchanged for an opaque access token"
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -82,6 +83,7 @@ test("authorization code can be issued and exchanged for a jwt access token veri
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -159,6 +161,7 @@ test("authorization code flow supports PKCE and state together", async function 
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -246,6 +249,7 @@ test("OIDC authorization code flow with nonce", async function () {
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -368,6 +372,7 @@ test("OIDC refresh token flow returns new access and ID tokens", async function 
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -486,6 +491,7 @@ test("signup route creates a user who can then log in and receive a valid jwt ac
   const userStore = createUserStore([]);
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
     userStore,

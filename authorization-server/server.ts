@@ -9,17 +9,25 @@ import { registerOpenIdConfigurationRoute } from "./routes/openid-configuration-
 import { registerSignupRoute } from "./routes/signup-route.ts";
 import { registerTokenRoute } from "./routes/token-route.ts";
 import { registerTotpRegistrationRoute } from "./routes/totp-registration-route.ts";
+import { registerMfaChallengeTotpRoute } from "./routes/mfa-challenge-totp-route.ts";
 import { registerUserinfoRoute } from "./routes/userinfo-route.ts";
 import {
   createAuthorizationCodeStore,
   type AuthorizationCodeStore,
 } from "./stores/authorization-code-store.ts";
 import {
+  createPendingAuthorizationStore,
+  type PendingAuthorizationStore,
+} from "./stores/pending-authorization-store.ts";
+import {
   createRefreshTokenStore,
   type RefreshTokenStore,
 } from "./stores/refresh-token-store.ts";
 import { createTokenStore, type TokenStore } from "./stores/token-store.ts";
 import { createUserStore, type UserStore } from "./stores/user-store.ts";
+import { createTimeBasedOneTimePasswordValidator } from "../otp/time-based-one-time-password.ts";
+import { devTotpConfig } from "./config/dev-totp-config.ts";
+import { fromBase32 } from "../util/base-encoding.ts";
 
 export const defaultAuthorizationServerPort = 4000;
 
@@ -44,11 +52,21 @@ export async function main() {
 
 export async function createServer(
   serverConfig?: ServerConfig,
+  pendingAuthorizationStore: PendingAuthorizationStore = createPendingAuthorizationStore(),
   authorizationCodeStore: AuthorizationCodeStore = createAuthorizationCodeStore(),
   tokenStore: TokenStore = createTokenStore(),
   userStore: UserStore = createUserStore(defaultUsers()),
   refreshTokenStore?: RefreshTokenStore,
 ) {
+  // We'll want to do per use validators later, for testing we've just shared the same validator between all users.
+  const totpValidator = createTimeBasedOneTimePasswordValidator({
+    key: fromBase32(devTotpConfig.secretBase32),
+    hashAlgorithm: "SHA1",
+    codeType: 'numeric', // otpauth:// URLs don't support providing alphanumeric as a type
+    codeLength: devTotpConfig.digits,
+    timeStepSeconds: devTotpConfig.period
+  });
+
   const resolvedServerConfig = serverConfig ?? (await getServerConfig());
   const resolvedRefreshTokenStore =
     refreshTokenStore ?? createRefreshTokenStore();
@@ -73,6 +91,7 @@ export async function createServer(
   registerAuthorizationRoute(
     fastify,
     resolvedServerConfig,
+    pendingAuthorizationStore,
     authorizationCodeStore,
     userStore,
   );
@@ -86,6 +105,14 @@ export async function createServer(
     userStore,
   );
   registerTotpRegistrationRoute(fastify);
+  registerMfaChallengeTotpRoute(
+    fastify,
+    resolvedServerConfig,
+    pendingAuthorizationStore,
+    authorizationCodeStore,
+    userStore,
+    totpValidator,
+  );
   registerJwksRoute(fastify, resolvedServerConfig);
   registerUserinfoRoute(fastify, resolvedServerConfig, userStore);
 
@@ -105,10 +132,11 @@ function logAuthorizationServerConfig(
       jwksUri: serverConfig.jwksUri,
       authorizationCodeLifetimeSeconds:
         serverConfig.authorizationCodeLifetimeSeconds,
+      mfaTransactionLifetimeSeconds: serverConfig.mfaTransactionLifetimeSeconds,
       clients: clientsConfig.map(function (client) {
         return {
           clientId: client.clientId,
-          requiresMfa: client.requiresMfa ?? false,
+          requiresMfa: client.requiresMfa,
           clientAuthMethod: client.clientAuthMethod,
           clientSecret:
             "clientSecret" in client && client.clientSecret

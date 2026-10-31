@@ -13,6 +13,11 @@ import { adminUserId, testUserId, defaultUsers } from "../default-users.ts";
 import { createServer } from "../server.ts";
 import { getTestServerConfig } from "../test/test-utils.ts";
 import { createUserStore, type UserStore } from "../stores/user-store.ts";
+import { clientsConfig } from "../config/clients-config.ts";
+import {
+  createPendingAuthorizationStore,
+  type PendingAuthorizationStore,
+} from "../stores/pending-authorization-store.ts";
 
 const defaultServerConfig = getTestServerConfig();
 
@@ -71,6 +76,57 @@ test("POST authorization endpoint redirects with an authorization code after log
     },
   );
   assert.ok(codeRecord.expiresAt > Date.now());
+});
+
+test("POST authorization endpoint redirects to TOTP MFA challenge when MFA is required", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const pendingAuthorizationStore = createPendingAuthorizationStore();
+  const serverConfig = getTestServerConfig({
+    authorizationCodeLifetimeSeconds: 60 * 10,
+    mfaTransactionLifetimeSeconds: 2,
+  });
+  const clientConfig = clientsConfig.find(
+    (client) => client.clientId === "client-id-opaque",
+  );
+  assert.ok(clientConfig);
+  const previousRequiresMfa = clientConfig.requiresMfa;
+  clientConfig.requiresMfa = true;
+
+  try {
+    const response = await submitAuthorizationLogin(
+      {
+        client_id: clientConfig.clientId,
+        response_type: "code",
+        redirect_uri: "http://localhost:3000/callback",
+      },
+      serverConfig,
+      authorizationCodeStore,
+      undefined,
+      undefined,
+      pendingAuthorizationStore,
+    );
+
+    assert.equal(response.status, 302);
+    const location = response.headers.get("location");
+    assert.ok(location);
+    const redirectUrl = new URL(location, "http://localhost");
+    assert.equal(redirectUrl.pathname, "/mfa-challenge-totp");
+    const transactionId = redirectUrl.searchParams.get("tx");
+    assert.ok(transactionId);
+    const pendingAuthorization =
+      pendingAuthorizationStore.loadPendingAuthorization(transactionId);
+    assert.ok(pendingAuthorization);
+    assert.equal(
+      pendingAuthorization.authorizationRequest.clientId,
+      clientConfig.clientId,
+    );
+    assert.equal(pendingAuthorization.subject, testUserId);
+    assert.ok(pendingAuthorization.expiresAt > Date.now());
+    assert.ok(pendingAuthorization.expiresAt <= Date.now() + 2_000);
+    assert.equal(authorizationCodeStore.isEmpty(), true);
+  } finally {
+    clientConfig.requiresMfa = previousRequiresMfa;
+  }
 });
 
 test("POST authorization endpoint echoes state in the redirect when provided", async function () {
@@ -625,6 +681,7 @@ async function fetchAuthorizationLoginPage(
 ) {
   const fastify = await createServer(
     serverConfig,
+    undefined,
     authorizationCodeStore,
     undefined,
     userStore,
@@ -659,12 +716,15 @@ async function submitAuthorizationLogin(
     password: "password",
   },
   userStore: UserStore = createUserStore(defaultUsers()),
+  pendingAuthorizationStore: PendingAuthorizationStore = createPendingAuthorizationStore(),
 ) {
   const fastify = await createServer(
     serverConfig,
+    pendingAuthorizationStore,
     authorizationCodeStore,
     undefined,
     userStore,
+    undefined,
   );
   const address = await fastify.listen({
     host: "127.0.0.1",

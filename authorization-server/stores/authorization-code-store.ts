@@ -5,6 +5,7 @@ export type AuthorizationCodeRecord = {
   scope?: string;
   nonce?: string;
   resource?: string;
+  /** Unix time in ms */
   expiresAt: number;
   codeChallenge?: string;
   codeChallengeMethod?: "plain" | "S256";

@@ -1083,6 +1083,7 @@ async function fetchTokenEndpoint(
 ) {
   const fastify = await createServer(
     serverConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
     userStore,
