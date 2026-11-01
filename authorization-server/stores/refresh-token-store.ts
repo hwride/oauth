@@ -5,6 +5,7 @@ export type RefreshTokenRecord = {
   resource?: string;
   scope?: string;
   subject: string;
+  /** Unix time in ms */
   expiresAt: number;
 };
 

@@ -17,6 +17,7 @@ test("authorization code flow defaults access token aud to issuer when no resour
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -56,6 +57,7 @@ test("authorization code flow sets access token aud to orders API resource when 
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -97,6 +99,7 @@ test("authorization code flow sets access token aud to requested resource indica
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -138,6 +141,7 @@ test("authorization code flow includes issuer and orders API resource audiences 
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -183,6 +187,7 @@ test("refresh token flow preserves resource audience from the original authoriza
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -244,6 +249,7 @@ test("authorization endpoint rejects unknown resource indicators", async functio
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -273,6 +279,7 @@ test("authorization code flow filters scopes by allowed scopes for the requested
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -310,6 +317,7 @@ test("OIDC scopes are not filtered by user or resource scope filtering", async f
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -347,6 +355,7 @@ test("authorization code flow keeps scopes allowed by the requested resource and
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );

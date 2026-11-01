@@ -78,3 +78,12 @@ export const clientsConfig: ClientConfig[] = [
     refreshTokenLifetimeSeconds,
   },
 ];
+
+// Apply requires MFA defaults.
+for(const clientConfig of clientsConfig) {
+  if(process.env.AUTH_SERVER_REQUIRES_MFA_DEFAULT) {
+    clientConfig.requiresMfa =
+      process.env.AUTH_SERVER_REQUIRES_MFA_DEFAULT === "true";
+  }
+}
+
