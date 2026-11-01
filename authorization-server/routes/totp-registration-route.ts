@@ -55,6 +55,7 @@ async function createUserSection() {
         type: "totp",
         secretBase32: totpMfaReg.secretBase32,
         accountName: user.username,
+        issuerParam: "example.com",
       });
       const qrCodeSvg = await QRCode.toString(registrationUrl, {
         type: "svg",

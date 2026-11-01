@@ -20,6 +20,12 @@ type OtpAuthUrlOptionsShared = {
    * The password manager uses this field to suggest credentials when setting up a new code generator.
    * */
   issuer?: string;
+  /**
+   * Value for the issuer query param. If empty will use the same value as issuer if provided.
+   * The apple docs indicate the query param should contain a domain, while the label issuer a human
+   * friendly name.
+   */
+  issuerParam?: string;
   /** The account name, e.g. test@example.com. */
   accountName: string;
   /** A secret value encoded in Base32. Secrets should be at least 160 bits. */
@@ -52,7 +58,11 @@ export function otpAuthUrl(options: OtpAuthUrlOptions): string {
     }
   };
 
-  setOptionalParamHelper("issuer");
+  if (options.issuerParam) {
+    url.searchParams.set("issuer", options.issuerParam);
+  } else if (options.issuer) {
+    url.searchParams.set("issuer", options.issuer);
+  }
   url.searchParams.set("secret", options.secretBase32); // Non-optional
   setOptionalParamHelper("algorithm");
   setOptionalParamHelper("digits");
