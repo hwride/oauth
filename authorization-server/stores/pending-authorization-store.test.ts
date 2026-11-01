@@ -57,6 +57,19 @@ test("pending authorization store returns false when deleting a missing transact
   assert.equal(store.deletePendingAuthorization(null), false);
 });
 
+test("pending authorization store removes a transaction after the maximum failed MFA attempts", () => {
+  const store = createPendingAuthorizationStore();
+  store.savePendingAuthorization(transactionId, createRecord());
+
+  assert.equal(store.recordFailedMfaAttempt(transactionId, 5), "recorded");
+  assert.equal(store.recordFailedMfaAttempt(transactionId, 5), "recorded");
+  assert.equal(store.recordFailedMfaAttempt(transactionId, 5), "recorded");
+  assert.equal(store.recordFailedMfaAttempt(transactionId, 5), "recorded");
+  assert.equal(store.recordFailedMfaAttempt(transactionId, 5), "exhausted");
+  assert.equal(store.loadPendingAuthorization(transactionId), undefined);
+  assert.equal(store.recordFailedMfaAttempt(transactionId, 5), "not_found");
+});
+
 function createRecord(expiresAt = Date.now() + 60_000) {
   return {
     authorizationRequest: {
@@ -65,6 +78,7 @@ function createRecord(expiresAt = Date.now() + 60_000) {
       responseType: "code",
     },
     subject: "test-user",
+    mfaFailedAttempts: 0,
     expiresAt,
   };
 }

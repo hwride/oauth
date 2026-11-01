@@ -5,7 +5,10 @@ export type PendingAuthorizationRecord = {
   subject: string;
   /** Unix time in ms */
   expiresAt: number;
+  mfaFailedAttempts: number;
 };
+
+export type RecordMfaAttemptResult = "recorded" | "exhausted" | "not_found";
 
 /**
  * This is a store for saving the state of pending authorization requests. I.e. authorization requests that
@@ -20,6 +23,10 @@ export type PendingAuthorizationStore = {
     transactionId: string | null | undefined,
   ): PendingAuthorizationRecord | undefined;
   deletePendingAuthorization(transactionId: string | null | undefined): boolean;
+  recordFailedMfaAttempt(
+    transactionId: string | null | undefined,
+    maxAttempts: number,
+  ): RecordMfaAttemptResult;
   isEmpty(): boolean;
 };
 
@@ -67,6 +74,35 @@ export function createPendingAuthorizationStore(): PendingAuthorizationStore {
       }
 
       return pendingAuthorizations.delete(transactionId);
+    },
+
+    recordFailedMfaAttempt(transactionId, maxAttempts) {
+      if (transactionId == null) {
+        return "not_found";
+      }
+
+      const record = pendingAuthorizations.get(transactionId);
+      if (!record) {
+        return "not_found";
+      }
+
+      // Re-check expiry before recording the attempt, since the transaction may
+      // have expired after the route initially loaded it.
+      if (record.expiresAt <= Date.now()) {
+        pendingAuthorizations.delete(transactionId);
+        return "not_found";
+      }
+
+      const failedAttempts = record.mfaFailedAttempts + 1;
+      if (failedAttempts >= maxAttempts) {
+        // Incrementing and deleting are synchronous so the final attempt cannot
+        // race with another request in this process and leave the transaction usable.
+        pendingAuthorizations.delete(transactionId);
+        return "exhausted";
+      }
+
+      record.mfaFailedAttempts = failedAttempts;
+      return "recorded";
     },
 
     isEmpty() {

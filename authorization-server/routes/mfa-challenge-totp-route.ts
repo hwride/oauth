@@ -34,6 +34,12 @@ export function registerMfaChallengeTotpRoute(
     registration: MfaRegistration,
   ) => TotpValidator = createDefaultTotpValidator,
 ) {
+  /*
+    !!! NOTE !!!
+    This is a simple validator store at the moment. But if a user can later rotate secrets or similar
+    then these validators will no longer be correctly configured. At that point adjustment of this
+    code will be needed somehow to update validators or similar.
+   */
   const userIdToValidator: Record<string, TotpValidator> = {};
   function getUserValidator(user: UserRecord): TotpValidator | undefined {
     if (userIdToValidator[user.userId]) {
@@ -138,6 +144,34 @@ export function registerMfaChallengeTotpRoute(
     const { isValid } = await totpValidator.validate(request.body.code);
 
     if (!isValid) {
+      const attemptResult = pendingAuthorizationStore.recordFailedMfaAttempt(
+        tx,
+        serverConfig.mfaMaxAttempts,
+      );
+      if (attemptResult === "exhausted") {
+        return reply
+          .code(401)
+          .type("text/html; charset=utf-8")
+          .send(
+            renderMfaChallengeTotpPage({
+              errorText:
+                "Too many MFA challenge failures, please start your login again.",
+            }),
+          );
+      }
+
+      if (attemptResult === "not_found") {
+        return reply
+          .code(401)
+          .type("text/html; charset=utf-8")
+          .send(
+            renderMfaChallengeTotpPage({
+              errorText:
+                "Login transaction has already been completed or expired.",
+            }),
+          );
+      }
+
       return reply
         .code(401)
         .type("text/html; charset=utf-8")

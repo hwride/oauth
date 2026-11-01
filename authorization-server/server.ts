@@ -123,6 +123,7 @@ function logAuthorizationServerConfig(
       authorizationCodeLifetimeSeconds:
         serverConfig.authorizationCodeLifetimeSeconds,
       mfaTransactionLifetimeSeconds: serverConfig.mfaTransactionLifetimeSeconds,
+      mfaMaxAttempts: serverConfig.mfaMaxAttempts,
       clients: clientsConfig.map(function (client) {
         return {
           clientId: client.clientId,

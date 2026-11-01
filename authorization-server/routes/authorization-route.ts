@@ -104,6 +104,7 @@ export function registerAuthorizationRoute(
       pendingAuthorizationStore.savePendingAuthorization(transactionId, {
         authorizationRequest,
         subject: user.userId,
+        mfaFailedAttempts: 0,
         expiresAt:
           Date.now() + serverConfig.mfaTransactionLifetimeSeconds * 1000,
       });

@@ -4,8 +4,6 @@
 
 Some potential things that could be added to this auth server.
 
-- [ ] Add MFA with TOTP
-- [ ] otpauth:// util should validate secrets are at least 160 bits and in base 32.
 - [ ] Remove re-submission of authorization request values on login POST. Instead save in our authorization request store on the GET, instead of only doing it for MFA. 
 - [ ] Add OAuth Rich Authorization Requests
 - [ ] Add OAuth Step-Up Authentication
@@ -25,6 +23,7 @@ Some potential things that could be added to this auth server.
 - [ ] Auth server session, should support SSO
 - [ ] Make auth server state be stored server side rather than shared by query params between sign in/sign up.
 - [ ] Support multiple resource indicators in a single request
+- [x] Add MFA with TOTP
 - [x] Add base 16, 32 and 64 utilities algorithm.
 - [x] Add otpauth:// util.
 - [x] Add Time-Based One-Time Password (TOTP) algorithm.

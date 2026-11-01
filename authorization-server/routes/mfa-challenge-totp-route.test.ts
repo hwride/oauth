@@ -128,6 +128,38 @@ test("POST TOTP MFA challenge route treats a missing code as invalid", async () 
   }
 });
 
+test("POST TOTP MFA challenge route removes a transaction after five invalid attempts", async () => {
+  const fastify = Fastify();
+  await fastify.register(formbody);
+  const routeDependencies = setupRoute();
+  registerTestRoute(fastify, routeDependencies);
+
+  try {
+    const responses = [];
+    for (let attempt = 0; attempt < 5; attempt++) {
+      responses.push(await submitCode(fastify, transactionId, "000000"));
+    }
+
+    assert.deepEqual(
+      responses.slice(0, 4).map((response) => response.statusCode),
+      [401, 401, 401, 401],
+    );
+    assert.match(responses[4].body, /Too many MFA challenge failures/);
+    assert.doesNotMatch(
+      responses[4].body,
+      new RegExp(`mfa-challenge-totp\\?tx=${transactionId}`),
+    );
+    assert.equal(
+      routeDependencies.pendingAuthorizationStore.loadPendingAuthorization(
+        transactionId,
+      ),
+      undefined,
+    );
+  } finally {
+    await fastify.close();
+  }
+});
+
 test("MFA challenge route rejects an unknown transaction without echoing it", async () => {
   const fastify = Fastify();
   await fastify.register(formbody);
@@ -260,6 +292,7 @@ function setupRoute(expiresAt = Date.now() + 60_000) {
       responseType: "code",
     },
     subject: testUserId,
+    mfaFailedAttempts: 0,
     expiresAt,
   });
 
