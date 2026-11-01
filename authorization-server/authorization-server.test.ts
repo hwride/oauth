@@ -4,11 +4,16 @@ import test from "node:test";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { createAuthorizationCodeStore } from "./stores/authorization-code-store.ts";
 import { createServer } from "./server.ts";
-import { testUserId } from "./default-users.ts";
+import { defaultUsers, janeUserId, testUserId } from "./default-users.ts";
 import { getTestServerConfig } from "./test/test-utils.ts";
 import { createTokenStore } from "./stores/token-store.ts";
 import { createUserStore } from "./stores/user-store.ts";
 import { isUuidV4 } from "./utils/uuid.ts";
+import { clientsConfig } from "./config/clients-config.ts";
+import { totpConfig } from "./config/totp-config.ts";
+import { fromBase32 } from "../util/base-encoding.ts";
+import { timeBasedOneTimePasswordCode } from "../otp/time-based-one-time-password.ts";
+import { createPendingAuthorizationStore } from "./stores/pending-authorization-store.ts";
 
 /*
   This test file is for testing more end to end flows of the authorization server.
@@ -16,11 +21,114 @@ import { isUuidV4 } from "./utils/uuid.ts";
 
 const defaultServerConfig = getTestServerConfig();
 
+test("MFA authorization flow completes TOTP challenge and preserves the transaction request", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const pendingAuthorizationStore = createPendingAuthorizationStore();
+  const clientConfig = clientsConfig.find(
+    (client) => client.clientId === "client-id-opaque",
+  );
+  assert.ok(clientConfig);
+  const testUser = defaultUsers().find((user) => user.userId === testUserId);
+  assert.ok(testUser);
+  const totpMfaRegistration = testUser.mfaRegistrations?.find(
+    (registration) => registration.type === "TOTP",
+  );
+  assert.ok(totpMfaRegistration);
+
+  const fastify = await createServer(
+    defaultServerConfig,
+    pendingAuthorizationStore,
+    authorizationCodeStore,
+  );
+  const address = await fastify.listen({
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const authorizationResponse = await authorizeClient(
+      address,
+      clientConfig.clientId,
+      {
+        credentials: {
+          username: "user",
+          password: "password",
+        },
+        authorizationRequest: {
+          scope: "openid",
+          state: "state-value-123",
+          nonce: "nonce-value-123",
+          code_challenge: "challenge-value-123",
+          code_challenge_method: "S256",
+        },
+      },
+    );
+    assert.equal(authorizationResponse.status, 302);
+
+    const challengeLocation = authorizationResponse.headers.get("location");
+    assert.notEqual(challengeLocation, null);
+    const challengeUrl = new URL(challengeLocation, address);
+    assert.equal(challengeUrl.pathname, "/mfa-challenge-totp");
+    const transactionId = challengeUrl.searchParams.get("tx");
+    assert.ok(transactionId);
+    assert.equal(isUuidV4(transactionId), true);
+
+    const { code } = await timeBasedOneTimePasswordCode({
+      key: fromBase32(totpMfaRegistration.secretBase32),
+      hashAlgorithm: totpConfig.algorithm,
+      codeType: "numeric",
+      codeLength: totpConfig.digits,
+      timeStepSeconds: totpConfig.period,
+    });
+    const mfaResponse = await fetch(
+      `${address}${challengeUrl.pathname}${challengeUrl.search}`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ code }).toString(),
+        redirect: "manual",
+      },
+    );
+
+    assert.equal(mfaResponse.status, 302);
+    const callbackUrl = getRedirectUrl(mfaResponse);
+    assert.equal(callbackUrl.origin, "http://localhost:3000");
+    assert.equal(callbackUrl.pathname, "/callback");
+    assert.equal(callbackUrl.searchParams.get("state"), "state-value-123");
+
+    const authorizationCode = callbackUrl.searchParams.get("code");
+    assert.notEqual(authorizationCode, null);
+    assert.equal(
+      pendingAuthorizationStore.loadPendingAuthorization(transactionId),
+      undefined,
+    );
+    const authorizationCodeRecord =
+      authorizationCodeStore.loadAuthorizationCode(authorizationCode);
+    assert.notEqual(authorizationCodeRecord, undefined);
+    assert.equal(authorizationCodeRecord.clientId, clientConfig.clientId);
+    assert.equal(authorizationCodeRecord.subject, testUserId);
+    assert.equal(
+      authorizationCodeRecord.redirectUri,
+      "http://localhost:3000/callback",
+    );
+    assert.equal(authorizationCodeRecord.scope, "openid");
+    assert.equal(authorizationCodeRecord.nonce, "nonce-value-123");
+    assert.equal(authorizationCodeRecord.codeChallenge, "challenge-value-123");
+    assert.equal(authorizationCodeRecord.codeChallengeMethod, "S256");
+    assert.ok(authorizationCodeRecord.expiresAt > Date.now());
+  } finally {
+    await fastify.close();
+  }
+});
+
 test("authorization code can be issued and exchanged for an opaque access token", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -82,6 +190,7 @@ test("authorization code can be issued and exchanged for a jwt access token veri
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -137,7 +246,7 @@ test("authorization code can be issued and exchanged for a jwt access token veri
     assert.equal(verified.protectedHeader.typ, "at+jwt");
     assert.equal(verified.payload.iss, defaultServerConfig.issuer);
     assert.equal(verified.payload.aud, defaultServerConfig.issuer);
-    assert.equal(verified.payload.sub, testUserId);
+    assert.equal(verified.payload.sub, janeUserId);
     assert.equal(verified.payload.client_id, "client-id-jwt");
     assert.equal(typeof verified.payload.jti, "string");
     assert.notEqual(verified.payload.jti.length, 0);
@@ -159,6 +268,7 @@ test("authorization code flow supports PKCE and state together", async function 
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -231,7 +341,7 @@ test("authorization code flow supports PKCE and state together", async function 
     assert.equal(verified.protectedHeader.typ, "at+jwt");
     assert.equal(verified.payload.iss, defaultServerConfig.issuer);
     assert.equal(verified.payload.aud, defaultServerConfig.issuer);
-    assert.equal(verified.payload.sub, testUserId);
+    assert.equal(verified.payload.sub, janeUserId);
     assert.equal(verified.payload.client_id, "client-id-jwt");
 
     assert.equal(authorizationCodeStore.hasAuthorizationCode(code), false);
@@ -246,6 +356,7 @@ test("OIDC authorization code flow with nonce", async function () {
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -317,7 +428,7 @@ test("OIDC authorization code flow with nonce", async function () {
     assert.equal(verifiedAccessToken.protectedHeader.typ, "at+jwt");
     assert.equal(verifiedAccessToken.payload.iss, defaultServerConfig.issuer);
     assert.equal(verifiedAccessToken.payload.aud, defaultServerConfig.issuer);
-    assert.equal(verifiedAccessToken.payload.sub, testUserId);
+    assert.equal(verifiedAccessToken.payload.sub, janeUserId);
     assert.equal(verifiedAccessToken.payload.client_id, "client-id-jwt");
     assert.equal(verifiedAccessToken.payload.scope, "openid profile");
     assert.equal(typeof verifiedAccessToken.payload.jti, "string");
@@ -337,8 +448,8 @@ test("OIDC authorization code flow with nonce", async function () {
     assert.equal(verifiedIdToken.protectedHeader.alg, "RS256");
     assert.equal(verifiedIdToken.payload.iss, defaultServerConfig.issuer);
     assert.equal(verifiedIdToken.payload.aud, "client-id-jwt");
-    assert.equal(verifiedIdToken.payload.sub, testUserId);
-    assert.equal(verifiedIdToken.payload.name, "John Smith");
+    assert.equal(verifiedIdToken.payload.sub, janeUserId);
+    assert.equal(verifiedIdToken.payload.name, "Jane Smith");
     assert.equal(verifiedIdToken.payload.nonce, nonce);
     assert.equal(typeof verifiedIdToken.payload.jti, "string");
     assert.notEqual(verifiedIdToken.payload.jti.length, 0);
@@ -352,8 +463,8 @@ test("OIDC authorization code flow with nonce", async function () {
     );
     assert.equal(userinfoResponse.status, 200);
     assert.deepEqual(await userinfoResponse.json(), {
-      sub: testUserId,
-      name: "John Smith",
+      sub: janeUserId,
+      name: "Jane Smith",
     });
 
     assert.equal(authorizationCodeStore.hasAuthorizationCode(code), false);
@@ -368,6 +479,7 @@ test("OIDC refresh token flow returns new access and ID tokens", async function 
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -486,6 +598,7 @@ test("signup route creates a user who can then log in and receive a valid jwt ac
   const userStore = createUserStore([]);
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
     userStore,
@@ -583,7 +696,7 @@ async function authorizeClient(
   clientId: string,
   {
     credentials = {
-      username: "user",
+      username: "jane",
       password: "password",
     },
     authorizationRequest = {},
@@ -595,7 +708,7 @@ async function authorizeClient(
     authorizationRequest?: Record<string, string>;
   } = {
     credentials: {
-      username: "user",
+      username: "jane",
       password: "password",
     },
   },

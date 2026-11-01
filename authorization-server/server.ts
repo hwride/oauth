@@ -9,17 +9,25 @@ import { registerOpenIdConfigurationRoute } from "./routes/openid-configuration-
 import { registerSignupRoute } from "./routes/signup-route.ts";
 import { registerTokenRoute } from "./routes/token-route.ts";
 import { registerTotpRegistrationRoute } from "./routes/totp-registration-route.ts";
+import { registerMfaChallengeTotpRoute } from "./routes/mfa-challenge-totp-route.ts";
 import { registerUserinfoRoute } from "./routes/userinfo-route.ts";
 import {
   createAuthorizationCodeStore,
   type AuthorizationCodeStore,
 } from "./stores/authorization-code-store.ts";
 import {
+  createPendingAuthorizationStore,
+  type PendingAuthorizationStore,
+} from "./stores/pending-authorization-store.ts";
+import {
   createRefreshTokenStore,
   type RefreshTokenStore,
 } from "./stores/refresh-token-store.ts";
 import { createTokenStore, type TokenStore } from "./stores/token-store.ts";
 import { createUserStore, type UserStore } from "./stores/user-store.ts";
+import { createTimeBasedOneTimePasswordValidator } from "../otp/time-based-one-time-password.ts";
+import { totpConfig } from "./config/totp-config.ts";
+import { fromBase32 } from "../util/base-encoding.ts";
 
 export const defaultAuthorizationServerPort = 4000;
 
@@ -44,6 +52,7 @@ export async function main() {
 
 export async function createServer(
   serverConfig?: ServerConfig,
+  pendingAuthorizationStore: PendingAuthorizationStore = createPendingAuthorizationStore(),
   authorizationCodeStore: AuthorizationCodeStore = createAuthorizationCodeStore(),
   tokenStore: TokenStore = createTokenStore(),
   userStore: UserStore = createUserStore(defaultUsers()),
@@ -73,6 +82,7 @@ export async function createServer(
   registerAuthorizationRoute(
     fastify,
     resolvedServerConfig,
+    pendingAuthorizationStore,
     authorizationCodeStore,
     userStore,
   );
@@ -85,7 +95,14 @@ export async function createServer(
     resolvedRefreshTokenStore,
     userStore,
   );
-  registerTotpRegistrationRoute(fastify);
+  registerTotpRegistrationRoute(fastify, resolvedServerConfig);
+  registerMfaChallengeTotpRoute(
+    fastify,
+    resolvedServerConfig,
+    pendingAuthorizationStore,
+    authorizationCodeStore,
+    userStore,
+  );
   registerJwksRoute(fastify, resolvedServerConfig);
   registerUserinfoRoute(fastify, resolvedServerConfig, userStore);
 
@@ -105,10 +122,11 @@ function logAuthorizationServerConfig(
       jwksUri: serverConfig.jwksUri,
       authorizationCodeLifetimeSeconds:
         serverConfig.authorizationCodeLifetimeSeconds,
+      mfaTransactionLifetimeSeconds: serverConfig.mfaTransactionLifetimeSeconds,
+      mfaMaxAttempts: serverConfig.mfaMaxAttempts,
       clients: clientsConfig.map(function (client) {
         return {
           clientId: client.clientId,
-          requiresMfa: client.requiresMfa ?? false,
           clientAuthMethod: client.clientAuthMethod,
           clientSecret:
             "clientSecret" in client && client.clientSecret

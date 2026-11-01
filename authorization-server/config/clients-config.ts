@@ -1,6 +1,5 @@
 export type ClientConfig = {
   clientId: string;
-  requiresMfa?: boolean;
   redirectUris: string[];
   accessTokenType: "opaque" | "jwt";
   accessTokenLifetimeSeconds: number;

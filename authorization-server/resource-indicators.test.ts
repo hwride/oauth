@@ -9,6 +9,8 @@ import {
 import { createAuthorizationCodeStore } from "./stores/authorization-code-store.ts";
 import { createTokenStore } from "./stores/token-store.ts";
 import { getTestServerConfig } from "./test/test-utils.ts";
+import { defaultUsers } from "./default-users.ts";
+import { createUserStore } from "./stores/user-store.ts";
 
 const defaultServerConfig = getTestServerConfig();
 
@@ -17,6 +19,7 @@ test("authorization code flow defaults access token aud to issuer when no resour
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -56,6 +59,7 @@ test("authorization code flow sets access token aud to orders API resource when 
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -97,6 +101,7 @@ test("authorization code flow sets access token aud to requested resource indica
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -138,6 +143,7 @@ test("authorization code flow includes issuer and orders API resource audiences 
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -183,6 +189,7 @@ test("refresh token flow preserves resource audience from the original authoriza
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -244,6 +251,7 @@ test("authorization endpoint rejects unknown resource indicators", async functio
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -273,8 +281,10 @@ test("authorization code flow filters scopes by allowed scopes for the requested
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
+    createUserStoreWithoutMfa(),
   );
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -282,10 +292,17 @@ test("authorization code flow filters scopes by allowed scopes for the requested
   });
 
   try {
-    const authorizationResponse = await authorizeClient(address, {
-      resource: ordersApiResource,
-      scope: "openid orders:read calendar:read",
-    });
+    const authorizationResponse = await authorizeClient(
+      address,
+      {
+        resource: ordersApiResource,
+        scope: "openid orders:read calendar:read",
+      },
+      {
+        username: "user",
+        password: "password",
+      },
+    );
     assert.equal(authorizationResponse.status, 302);
 
     const redirectUrl = getRedirectUrl(authorizationResponse);
@@ -310,6 +327,7 @@ test("OIDC scopes are not filtered by user or resource scope filtering", async f
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
   );
@@ -347,8 +365,10 @@ test("authorization code flow keeps scopes allowed by the requested resource and
   const tokenStore = createTokenStore();
   const fastify = await createServer(
     defaultServerConfig,
+    undefined,
     authorizationCodeStore,
     tokenStore,
+    createUserStoreWithoutMfa(),
   );
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -393,7 +413,7 @@ async function authorizeClient(
     username: string;
     password: string;
   } = {
-    username: "user",
+    username: "jane",
     password: "password",
   },
 ) {
@@ -420,6 +440,14 @@ async function authorizeClient(
     body: loginRequestBody,
     redirect: "manual",
   });
+}
+
+function createUserStoreWithoutMfa() {
+  return createUserStore(
+    defaultUsers().map(function ({ mfaRegistrations: _, ...user }) {
+      return user;
+    }),
+  );
 }
 
 async function fetchAuthorizationRequest(

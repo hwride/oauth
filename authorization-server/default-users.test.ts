@@ -16,6 +16,12 @@ test("defaultUsers returns the seeded test users", function () {
       password: "password",
       name: "John Wick",
       roles: ["admin"],
+      mfaRegistrations: [
+        {
+          type: "TOTP",
+          secretBase32: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+        },
+      ],
     },
     {
       userId: testUserId,
@@ -23,6 +29,12 @@ test("defaultUsers returns the seeded test users", function () {
       password: "password",
       name: "John Smith",
       roles: ["customer"],
+      mfaRegistrations: [
+        {
+          type: "TOTP",
+          secretBase32: "JXN44HP4T27N7PMSXH5L6DOUZ36ADZGV",
+        },
+      ],
     },
     {
       userId: janeUserId,

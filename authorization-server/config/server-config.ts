@@ -9,6 +9,8 @@ export type ServerConfig = {
   authorizationEndpoint: string;
   tokenEndpoint: string;
   jwksUri: string;
+  mfaTransactionLifetimeSeconds: number;
+  mfaMaxAttempts: number;
   authorizationCodeLifetimeSeconds: number;
 };
 
@@ -31,6 +33,8 @@ export async function getServerConfig(): Promise<ServerConfig> {
       process.env.AUTHORIZATION_ENDPOINT ?? `${issuer}/authorize`,
     tokenEndpoint: process.env.TOKEN_ENDPOINT ?? `${issuer}/token`,
     jwksUri: process.env.JWKS_URI ?? `${issuer}/.well-known/jwks.json`,
+    mfaTransactionLifetimeSeconds: 60 * 10,
+    mfaMaxAttempts: 5,
     authorizationCodeLifetimeSeconds: 60 * 10,
   };
 }

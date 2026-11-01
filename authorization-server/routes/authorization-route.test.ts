@@ -9,10 +9,19 @@ import {
   productsApiResource,
 } from "../config/resources-config.ts";
 import type { ServerConfig } from "../config/server-config.ts";
-import { adminUserId, testUserId, defaultUsers } from "../default-users.ts";
+import {
+  adminUserId,
+  defaultUsers,
+  janeUserId,
+  testUserId,
+} from "../default-users.ts";
 import { createServer } from "../server.ts";
 import { getTestServerConfig } from "../test/test-utils.ts";
 import { createUserStore, type UserStore } from "../stores/user-store.ts";
+import {
+  createPendingAuthorizationStore,
+  type PendingAuthorizationStore,
+} from "../stores/pending-authorization-store.ts";
 
 const defaultServerConfig = getTestServerConfig();
 
@@ -66,11 +75,64 @@ test("POST authorization endpoint redirects with an authorization code after log
     },
     {
       clientId: "client-id-opaque",
-      subject: testUserId,
+      subject: janeUserId,
       redirectUri: "http://localhost:3000/callback",
     },
   );
   assert.ok(codeRecord.expiresAt > Date.now());
+});
+
+test("POST authorization endpoint redirects to TOTP MFA challenge for users with MFA", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const pendingAuthorizationStore = createPendingAuthorizationStore();
+  const serverConfig = getTestServerConfig({
+    authorizationCodeLifetimeSeconds: 60 * 10,
+    mfaTransactionLifetimeSeconds: 2,
+  });
+  const response = await submitAuthorizationLogin(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      scope: "openid",
+      state: "state-value-123",
+      nonce: "nonce-value-123",
+      code_challenge: "challenge-value-123",
+      code_challenge_method: "S256",
+      resource: ordersApiResource,
+    },
+    serverConfig,
+    authorizationCodeStore,
+    { username: "user", password: "password" },
+    undefined,
+    pendingAuthorizationStore,
+  );
+
+  assert.equal(response.status, 302);
+  const location = response.headers.get("location");
+  assert.ok(location);
+  const redirectUrl = new URL(location, "http://localhost");
+  assert.equal(redirectUrl.pathname, "/mfa-challenge-totp");
+  const transactionId = redirectUrl.searchParams.get("tx");
+  assert.ok(transactionId);
+  const pendingAuthorization =
+    pendingAuthorizationStore.loadPendingAuthorization(transactionId);
+  assert.ok(pendingAuthorization);
+  assert.deepEqual(pendingAuthorization.authorizationRequest, {
+    clientId: "client-id-opaque",
+    redirectUri: "http://localhost:3000/callback",
+    responseType: "code",
+    scope: "openid",
+    state: "state-value-123",
+    nonce: "nonce-value-123",
+    codeChallenge: "challenge-value-123",
+    codeChallengeMethod: "S256",
+    resource: ordersApiResource,
+  });
+  assert.equal(pendingAuthorization.subject, testUserId);
+  assert.ok(pendingAuthorization.expiresAt > Date.now());
+  assert.ok(pendingAuthorization.expiresAt <= Date.now() + 2_000);
+  assert.equal(authorizationCodeStore.isEmpty(), true);
 });
 
 test("POST authorization endpoint echoes state in the redirect when provided", async function () {
@@ -124,7 +186,7 @@ test("POST authorization endpoint stores PKCE parameters with the authorization 
     },
     {
       clientId: "client-id-opaque",
-      subject: testUserId,
+      subject: janeUserId,
       redirectUri: "http://localhost:3000/callback",
       codeChallenge: "challenge-value-123",
       codeChallengeMethod: "S256",
@@ -168,6 +230,11 @@ test("POST authorization endpoint stores allowed resource scopes", async functio
     },
     defaultServerConfig,
     authorizationCodeStore,
+    {
+      username: "user",
+      password: "password",
+    },
+    createUserStoreWithoutMfa(),
   );
 
   assert.equal(response.status, 302);
@@ -196,6 +263,7 @@ test("POST authorization endpoint stores allowed admin resource scopes", async f
       username: "admin",
       password: "password",
     },
+    createUserStoreWithoutMfa(),
   );
 
   assert.equal(response.status, 302);
@@ -625,6 +693,7 @@ async function fetchAuthorizationLoginPage(
 ) {
   const fastify = await createServer(
     serverConfig,
+    undefined,
     authorizationCodeStore,
     undefined,
     userStore,
@@ -655,16 +724,19 @@ async function submitAuthorizationLogin(
     username: string;
     password: string;
   } = {
-    username: "user",
+    username: "jane",
     password: "password",
   },
   userStore: UserStore = createUserStore(defaultUsers()),
+  pendingAuthorizationStore: PendingAuthorizationStore = createPendingAuthorizationStore(),
 ) {
   const fastify = await createServer(
     serverConfig,
+    pendingAuthorizationStore,
     authorizationCodeStore,
     undefined,
     userStore,
+    undefined,
   );
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -697,4 +769,12 @@ function getRedirectUrl(response: Response) {
   const location = response.headers.get("location");
   assert.notEqual(location, null);
   return new URL(location);
+}
+
+function createUserStoreWithoutMfa() {
+  return createUserStore(
+    defaultUsers().map(function ({ mfaRegistrations: _, ...user }) {
+      return user;
+    }),
+  );
 }

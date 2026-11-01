@@ -77,8 +77,6 @@ export type TotpOptionsCode = TotpOptionsShared & {
 const defaultTimeStepSeconds = 30;
 const defaultAllowedTimeSteps = 1;
 
-// TODO: Adjust HOTP to support different hash functions.
-
 /**
  * In-memory code store. Not suitable for production.
  */
