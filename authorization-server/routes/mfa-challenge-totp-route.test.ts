@@ -292,6 +292,7 @@ function setupRoute(expiresAt = Date.now() + 60_000) {
       responseType: "code",
     },
     subject: testUserId,
+    amr: ["pwd"],
     mfaFailedAttempts: 0,
     expiresAt,
   });

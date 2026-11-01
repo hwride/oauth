@@ -34,6 +34,7 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
     (registration) => registration.type === "TOTP",
   );
   assert.ok(totpMfaRegistration);
+  const codeVerifier = "mfa-code-verifier";
 
   const fastify = await createServer(
     defaultServerConfig,
@@ -58,7 +59,7 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
           scope: "openid",
           state: "state-value-123",
           nonce: "nonce-value-123",
-          code_challenge: "challenge-value-123",
+          code_challenge: createS256CodeChallenge(codeVerifier),
           code_challenge_method: "S256",
         },
       },
@@ -109,15 +110,45 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
     assert.notEqual(authorizationCodeRecord, undefined);
     assert.equal(authorizationCodeRecord.clientId, clientConfig.clientId);
     assert.equal(authorizationCodeRecord.subject, testUserId);
+    assert.deepEqual(authorizationCodeRecord.amr, ["pwd", "otp", "mfa"]);
     assert.equal(
       authorizationCodeRecord.redirectUri,
       "http://localhost:3000/callback",
     );
     assert.equal(authorizationCodeRecord.scope, "openid");
     assert.equal(authorizationCodeRecord.nonce, "nonce-value-123");
-    assert.equal(authorizationCodeRecord.codeChallenge, "challenge-value-123");
+    assert.equal(
+      authorizationCodeRecord.codeChallenge,
+      createS256CodeChallenge(codeVerifier),
+    );
     assert.equal(authorizationCodeRecord.codeChallengeMethod, "S256");
     assert.ok(authorizationCodeRecord.expiresAt > Date.now());
+
+    const tokenResponse = await fetchTokenEndpoint(
+      address,
+      authorizationCode,
+      clientConfig.clientId,
+      "test-client-secret",
+      { code_verifier: codeVerifier },
+    );
+    assert.equal(tokenResponse.status, 200);
+    const tokenResponseBody = (await tokenResponse.json()) as {
+      id_token: string;
+    };
+    const verifiedIdToken = await jwtVerify(
+      tokenResponseBody.id_token,
+      defaultServerConfig.publicKey,
+      {
+        algorithms: ["RS256"],
+        issuer: defaultServerConfig.issuer,
+        audience: clientConfig.clientId,
+      },
+    );
+    assert.deepEqual(verifiedIdToken.payload.amr, ["pwd", "otp", "mfa"]);
+    assert.equal(
+      authorizationCodeStore.hasAuthorizationCode(authorizationCode),
+      false,
+    );
   } finally {
     await fastify.close();
   }
@@ -541,6 +572,7 @@ test("OIDC refresh token flow returns new access and ID tokens", async function 
         audience: "client-id-jwt",
       },
     );
+    assert.deepEqual(verifiedInitialIdToken.payload.amr, ["pwd"]);
     assert.equal(typeof verifiedInitialIdToken.payload.iat, "number");
 
     // Sleep long enough that iat will change for ID tokens.
@@ -582,6 +614,7 @@ test("OIDC refresh token flow returns new access and ID tokens", async function 
       },
     );
 
+    assert.deepEqual(verifiedRefreshIdToken.payload.amr, ["pwd"]);
     assert.equal(typeof verifiedRefreshIdToken.payload.iat, "number");
     assert.ok(
       verifiedRefreshIdToken.payload.iat > verifiedInitialIdToken.payload.iat,

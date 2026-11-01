@@ -71,11 +71,13 @@ test("POST authorization endpoint redirects with an authorization code after log
     {
       clientId: codeRecord.clientId,
       subject: codeRecord.subject,
+      amr: codeRecord.amr,
       redirectUri: codeRecord.redirectUri,
     },
     {
       clientId: "client-id-opaque",
       subject: janeUserId,
+      amr: ["pwd"],
       redirectUri: "http://localhost:3000/callback",
     },
   );
@@ -130,6 +132,7 @@ test("POST authorization endpoint redirects to TOTP MFA challenge for users with
     resource: ordersApiResource,
   });
   assert.equal(pendingAuthorization.subject, testUserId);
+  assert.deepEqual(pendingAuthorization.amr, ["pwd"]);
   assert.ok(pendingAuthorization.expiresAt > Date.now());
   assert.ok(pendingAuthorization.expiresAt <= Date.now() + 2_000);
   assert.equal(authorizationCodeStore.isEmpty(), true);

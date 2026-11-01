@@ -7,6 +7,7 @@ Here are a list of some relevant OAuth specifications for this project.
 - (2015-07) [RFC 7591 OAuth 2.0 Dynamic Client Registration Protocol](https://datatracker.ietf.org/doc/html/rfc7591)
 - (2015-09) [RFC 7636 Proof Key for Code Exchange by OAuth Public Clients](https://datatracker.ietf.org/doc/html/rfc7636)
 - (2015-10) [RFC 7662 OAuth 2.0 Token Introspection](https://datatracker.ietf.org/doc/html/rfc7662)
+- (2017-06) [RFC 8176 Authentication Method Reference Values](https://datatracker.ietf.org/doc/html/rfc8176)
 - (2020-01) [RFC 8693 OAuth 2.0 Token Exchange](https://datatracker.ietf.org/doc/html/rfc8693)
 - (2020-02) [RFC 8707 Resource Indicators for OAuth 2.0](https://datatracker.ietf.org/doc/html/rfc8707)
 - (2021-10) [RFC 9068 JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens](https://datatracker.ietf.org/doc/html/rfc9068)

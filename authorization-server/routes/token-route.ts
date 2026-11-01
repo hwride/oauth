@@ -7,6 +7,9 @@ import type { AuthorizationCodeStore } from "../stores/authorization-code-store.
 import type { RefreshTokenStore } from "../stores/refresh-token-store.ts";
 import type { AccessTokenRecord, TokenStore } from "../stores/token-store.ts";
 import type { UserStore } from "../stores/user-store.ts";
+import type {
+  AuthenticationMethodReference,
+} from "../types/authentication-method-reference.ts";
 
 type TokenRequestBody = {
   grant_type?: string;
@@ -279,6 +282,7 @@ async function authCodeGrant({
       clientConfig,
       scope: authCodeRecord.scope,
       subject: authCodeRecord.subject,
+      amr: authCodeRecord.amr,
       nonce: authCodeRecord.nonce,
       userStore,
     });
@@ -292,6 +296,7 @@ async function authCodeGrant({
         resource: authCodeRecord.resource,
         scope: authCodeRecord.scope,
         subject: authCodeRecord.subject,
+        amr: authCodeRecord.amr,
       },
       clientConfig.refreshTokenLifetimeSeconds,
     );
@@ -389,6 +394,7 @@ async function refreshTokenGrant({
       clientConfig,
       scope: refreshRecord.scope,
       subject: refreshRecord.subject,
+      amr: refreshRecord.amr,
       // no nonce on refresh requests
       userStore,
     });
@@ -486,11 +492,13 @@ async function generateIdToken({
   subject,
   nonce,
   userStore,
+  amr,
 }: {
   serverConfig: ServerConfig;
   clientConfig: ClientConfig;
   scope?: string;
   subject: string;
+  amr?: AuthenticationMethodReference[];
   nonce?: string;
   userStore: UserStore;
 }) {
@@ -502,6 +510,11 @@ async function generateIdToken({
   };
   if (nonce) {
     idTokenPayload.nonce = nonce;
+  }
+  if (amr) {
+    // OIDC Core defines the amr claim for ID Tokens:
+    // https://openid.net/specs/openid-connect-core-1_0.html#IDToken
+    idTokenPayload.amr = amr;
   }
 
   // https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims

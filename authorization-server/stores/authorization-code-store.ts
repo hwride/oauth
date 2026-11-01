@@ -1,6 +1,11 @@
+import type {
+  AuthenticationMethodReference,
+} from "../types/authentication-method-reference.ts";
+
 export type AuthorizationCodeRecord = {
   clientId: string;
   subject: string;
+  amr: AuthenticationMethodReference[];
   redirectUri: string;
   scope?: string;
   nonce?: string;

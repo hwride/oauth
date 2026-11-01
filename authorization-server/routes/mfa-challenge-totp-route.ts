@@ -109,7 +109,7 @@ export function registerMfaChallengeTotpRoute(
         );
     }
 
-    const { authorizationRequest, subject } =
+    const { authorizationRequest, subject, amr } =
       validationResult.pendingAuthorization;
     const user = userStore.loadUserById(subject);
     if (user == null) {
@@ -200,6 +200,9 @@ export function registerMfaChallengeTotpRoute(
         authorizationCodeStore,
         authorizationRequest,
         user,
+        // OIDC Authentication Method Reference values defined by RFC 8176:
+        // https://datatracker.ietf.org/doc/html/rfc8176
+        [...amr, "otp", "mfa"],
       ),
     );
   });
