@@ -26,7 +26,7 @@ import {
 import { createTokenStore, type TokenStore } from "./stores/token-store.ts";
 import { createUserStore, type UserStore } from "./stores/user-store.ts";
 import { createTimeBasedOneTimePasswordValidator } from "../otp/time-based-one-time-password.ts";
-import { devTotpConfig } from "./config/dev-totp-config.ts";
+import { devTotpConfig } from "./config/totp-config.ts";
 import { fromBase32 } from "../util/base-encoding.ts";
 
 export const defaultAuthorizationServerPort = 4000;
@@ -58,15 +58,6 @@ export async function createServer(
   userStore: UserStore = createUserStore(defaultUsers()),
   refreshTokenStore?: RefreshTokenStore,
 ) {
-  // We'll want to do per use validators later, for testing we've just shared the same validator between all users.
-  const totpValidator = createTimeBasedOneTimePasswordValidator({
-    key: fromBase32(devTotpConfig.secretBase32),
-    hashAlgorithm: "SHA1",
-    codeType: 'numeric', // otpauth:// URLs don't support providing alphanumeric as a type
-    codeLength: devTotpConfig.digits,
-    timeStepSeconds: devTotpConfig.period
-  });
-
   const resolvedServerConfig = serverConfig ?? (await getServerConfig());
   const resolvedRefreshTokenStore =
     refreshTokenStore ?? createRefreshTokenStore();
@@ -111,7 +102,6 @@ export async function createServer(
     pendingAuthorizationStore,
     authorizationCodeStore,
     userStore,
-    totpValidator,
   );
   registerJwksRoute(fastify, resolvedServerConfig);
   registerUserinfoRoute(fastify, resolvedServerConfig, userStore);

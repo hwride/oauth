@@ -8,6 +8,12 @@ export type UserRecord = {
   name: string;
   roles?: Role[];
   allowedScopes?: Scope[];
+  mfaRegistrations?: MfaRegistration[];
+};
+export type MfaRegistration = {
+  type: "TOTP";
+  /** 160-bit Base32 secret. */
+  secretBase32: string;
 };
 
 export type CreateUserInput = Omit<UserRecord, "userId">;

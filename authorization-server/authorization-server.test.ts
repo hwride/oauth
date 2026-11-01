@@ -10,7 +10,7 @@ import { createTokenStore } from "./stores/token-store.ts";
 import { createUserStore } from "./stores/user-store.ts";
 import { isUuidV4 } from "./utils/uuid.ts";
 import { clientsConfig } from "./config/clients-config.ts";
-import { devTotpConfig } from "./config/dev-totp-config.ts";
+import { devTotpConfig } from "./config/totp-config.ts";
 import { fromBase32 } from "../util/base-encoding.ts";
 import { timeBasedOneTimePasswordCode } from "../otp/time-based-one-time-password.ts";
 import { createPendingAuthorizationStore } from "./stores/pending-authorization-store.ts";

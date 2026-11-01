@@ -1,14 +1,20 @@
-import type { FastifyInstance } from "fastify";
-import type { TotpValidator } from "../../otp/time-based-one-time-password.ts";
+import Fastify, { type FastifyInstance } from "fastify";
+import {
+  createTimeBasedOneTimePasswordValidator,
+  type TotpValidator,
+} from "../../otp/time-based-one-time-password.ts";
 import type {
   PendingAuthorizationRecord,
   PendingAuthorizationStore,
 } from "../stores/pending-authorization-store.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
 import { createAuthorizationRedirectUrl } from "./authorization-route.ts";
-import type { ServerConfig } from "../config/server-config.ts";
-import type { UserStore } from "../stores/user-store.ts";
+import { getServerConfig, type ServerConfig } from "../config/server-config.ts";
+import type { UserRecord, UserStore } from "../stores/user-store.ts";
 import type { AuthorizationCodeStore } from "../stores/authorization-code-store.ts";
+import { createRefreshTokenStore } from "../stores/refresh-token-store.ts";
+import { fromBase32 } from "../../util/base-encoding.ts";
+import { devTotpConfig } from "../config/totp-config.ts";
 
 type MfaChallengeQueryParams = {
   tx?: string;
@@ -20,8 +26,26 @@ export function registerMfaChallengeTotpRoute(
   pendingAuthorizationStore: PendingAuthorizationStore,
   authorizationCodeStore: AuthorizationCodeStore,
   userStore: UserStore,
-  totpValidator: TotpValidator,
 ) {
+  const userIdToValidator: Record<string, TotpValidator> = {};
+  function getUserValidator(user: UserRecord): TotpValidator {
+    if (userIdToValidator[user.userId]) {
+      return userIdToValidator[user.userId];
+    }
+
+    const totpMfaReg = user.mfaRegistrations?.find(
+      (reg) => reg.type === "TOTP",
+    );
+    const totpValidator = createTimeBasedOneTimePasswordValidator({
+      key: fromBase32(totpMfaReg.secretBase32),
+      hashAlgorithm: devTotpConfig.algorithm,
+      codeType: "numeric", // otpauth:// URLs don't support providing alphanumeric as a type
+      codeLength: devTotpConfig.digits,
+      timeStepSeconds: devTotpConfig.period,
+    });
+    return totpValidator;
+  }
+
   fastify.get<{
     Querystring: MfaChallengeQueryParams;
   }>("/mfa-challenge-totp", async function (request, reply) {
@@ -84,6 +108,22 @@ export function registerMfaChallengeTotpRoute(
         );
     }
 
+    // Get the TOTP validator for this user.
+    const totpValidator = getUserValidator(user);
+    if (totpValidator == null) {
+      return reply
+        .code(401)
+        .type("text/html; charset=utf-8")
+        .send(
+          renderMfaChallengeTotpPage({
+            tx,
+            errorText:
+              "User is not registered for TOTP multi-factor authentication",
+          }),
+        );
+    }
+
+    // Validate the given code.
     const { isValid } = await totpValidator.validate(request.body.code);
 
     if (!isValid) {
