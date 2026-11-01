@@ -5,8 +5,10 @@ export type TotpConfig = Required<
 >;
 
 /** Fixed development-only TOTP registration details. */
-export const devTotpConfig: TotpConfig = {
+export const totpConfig: TotpConfig = {
   issuer: "OAuth Dev",
+  // The following options below chosen for maximum compatibility.
+  // Microsoft authenticator for example will only support 6 digits with a period of 30s.
   algorithm: "SHA1",
   digits: 6,
   period: 30,

@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import { type FastifyInstance } from "fastify";
 import {
   createTimeBasedOneTimePasswordValidator,
   type TotpValidator,
@@ -9,12 +9,15 @@ import type {
 } from "../stores/pending-authorization-store.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
 import { createAuthorizationRedirectUrl } from "./authorization-route.ts";
-import { getServerConfig, type ServerConfig } from "../config/server-config.ts";
-import type { UserRecord, UserStore } from "../stores/user-store.ts";
+import { type ServerConfig } from "../config/server-config.ts";
+import type {
+  MfaRegistration,
+  UserRecord,
+  UserStore,
+} from "../stores/user-store.ts";
 import type { AuthorizationCodeStore } from "../stores/authorization-code-store.ts";
-import { createRefreshTokenStore } from "../stores/refresh-token-store.ts";
 import { fromBase32 } from "../../util/base-encoding.ts";
-import { devTotpConfig } from "../config/totp-config.ts";
+import { totpConfig } from "../config/totp-config.ts";
 
 type MfaChallengeQueryParams = {
   tx?: string;
@@ -26,9 +29,13 @@ export function registerMfaChallengeTotpRoute(
   pendingAuthorizationStore: PendingAuthorizationStore,
   authorizationCodeStore: AuthorizationCodeStore,
   userStore: UserStore,
+  /** Function to create a TOTP validator. Mainly exposed for overwriting for test convenience. */
+  createTotpValidator: (
+    registration: MfaRegistration,
+  ) => TotpValidator = createDefaultTotpValidator,
 ) {
   const userIdToValidator: Record<string, TotpValidator> = {};
-  function getUserValidator(user: UserRecord): TotpValidator {
+  function getUserValidator(user: UserRecord): TotpValidator | undefined {
     if (userIdToValidator[user.userId]) {
       return userIdToValidator[user.userId];
     }
@@ -36,13 +43,11 @@ export function registerMfaChallengeTotpRoute(
     const totpMfaReg = user.mfaRegistrations?.find(
       (reg) => reg.type === "TOTP",
     );
-    const totpValidator = createTimeBasedOneTimePasswordValidator({
-      key: fromBase32(totpMfaReg.secretBase32),
-      hashAlgorithm: devTotpConfig.algorithm,
-      codeType: "numeric", // otpauth:// URLs don't support providing alphanumeric as a type
-      codeLength: devTotpConfig.digits,
-      timeStepSeconds: devTotpConfig.period,
-    });
+    if (!totpMfaReg) {
+      return undefined;
+    }
+    const totpValidator = createTotpValidator(totpMfaReg);
+    userIdToValidator[user.userId] = totpValidator;
     return totpValidator;
   }
 
@@ -225,6 +230,18 @@ function renderMfaChallengeTotpPage({
     </form>
   </body>
 </html>`;
+}
+
+function createDefaultTotpValidator(
+  registration: MfaRegistration,
+): TotpValidator {
+  return createTimeBasedOneTimePasswordValidator({
+    key: fromBase32(registration.secretBase32),
+    codeType: "numeric", // otpauth:// URLs don't support providing alphanumeric as a type
+    hashAlgorithm: totpConfig.algorithm,
+    codeLength: totpConfig.digits,
+    timeStepSeconds: totpConfig.period,
+  });
 }
 
 function escapeHtml(value: string) {

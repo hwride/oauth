@@ -26,7 +26,7 @@ import {
 import { createTokenStore, type TokenStore } from "./stores/token-store.ts";
 import { createUserStore, type UserStore } from "./stores/user-store.ts";
 import { createTimeBasedOneTimePasswordValidator } from "../otp/time-based-one-time-password.ts";
-import { devTotpConfig } from "./config/totp-config.ts";
+import { totpConfig } from "./config/totp-config.ts";
 import { fromBase32 } from "../util/base-encoding.ts";
 
 export const defaultAuthorizationServerPort = 4000;
@@ -95,7 +95,7 @@ export async function createServer(
     resolvedRefreshTokenStore,
     userStore,
   );
-  registerTotpRegistrationRoute(fastify);
+  registerTotpRegistrationRoute(fastify, resolvedServerConfig);
   registerMfaChallengeTotpRoute(
     fastify,
     resolvedServerConfig,
@@ -126,7 +126,6 @@ function logAuthorizationServerConfig(
       clients: clientsConfig.map(function (client) {
         return {
           clientId: client.clientId,
-          requiresMfa: client.requiresMfa,
           clientAuthMethod: client.clientAuthMethod,
           clientSecret:
             "clientSecret" in client && client.clientSecret

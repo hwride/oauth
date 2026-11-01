@@ -1,8 +1,9 @@
 import QRCode from "qrcode";
 import type { FastifyInstance } from "fastify";
 import { otpAuthUrl } from "../../otp/otp-auth-url.ts";
-import { devTotpConfig } from "../config/totp-config.ts";
+import { totpConfig } from "../config/totp-config.ts";
 import { defaultUsers } from "../default-users.ts";
+import type { ServerConfig } from "../config/server-config.ts";
 import type { MfaRegistration, UserRecord } from "../stores/user-store.ts";
 import {
   createTimeBasedOneTimePasswordValidator,
@@ -10,9 +11,13 @@ import {
 } from "../../otp/time-based-one-time-password.ts";
 import { fromBase32 } from "../../util/base-encoding.ts";
 
-export function registerTotpRegistrationRoute(fastify: FastifyInstance) {
+export function registerTotpRegistrationRoute(
+  fastify: FastifyInstance,
+  serverConfig: ServerConfig,
+) {
   fastify.get("/dev/totp-registration", async function (_, reply) {
-    const userSection = await createUserSection();
+    const issuerParam = new URL(serverConfig.issuer).hostname;
+    const userSection = await createUserSection(issuerParam);
 
     return reply.type("text/html; charset=utf-8").send(`<!doctype html>
 <html lang="en">
@@ -25,10 +30,10 @@ export function registerTotpRegistrationRoute(fastify: FastifyInstance) {
     
     <h2>Server TOTP config</h2>
     <table>
-      <tr><td>Issuer</td><td>${devTotpConfig.issuer}</td></tr>
-      <tr><td>Algorithm</td><td>${devTotpConfig.algorithm}</td></tr>
-      <tr><td>Period</td><td>${devTotpConfig.period}</td></tr>
-      <tr><td>Digits</td><td>${devTotpConfig.digits}</td></tr>
+      <tr><td>Issuer</td><td>${totpConfig.issuer}</td></tr>
+      <tr><td>Algorithm</td><td>${totpConfig.algorithm}</td></tr>
+      <tr><td>Period</td><td>${totpConfig.period}</td></tr>
+      <tr><td>Digits</td><td>${totpConfig.digits}</td></tr>
     </table>
     
     <h2>Test user registration QR codes</h2>
@@ -39,7 +44,7 @@ export function registerTotpRegistrationRoute(fastify: FastifyInstance) {
   });
 }
 
-async function createUserSection() {
+async function createUserSection(issuerParam: string) {
   const defaultUsersWithTotpMfa: {
     user: UserRecord;
     totpMfaReg: MfaRegistration;
@@ -51,11 +56,11 @@ async function createUserSection() {
     const totpMfaReg = user.mfaRegistrations?.find((r) => r.type === "TOTP");
     if (totpMfaReg) {
       const registrationUrl = otpAuthUrl({
-        ...devTotpConfig,
+        ...totpConfig,
         type: "totp",
         secretBase32: totpMfaReg.secretBase32,
         accountName: user.username,
-        issuerParam: "example.com",
+        issuerParam,
       });
       const qrCodeSvg = await QRCode.toString(registrationUrl, {
         type: "svg",
@@ -64,9 +69,9 @@ async function createUserSection() {
       const { code: latestCode } = await timeBasedOneTimePasswordCode({
         key: fromBase32(totpMfaReg.secretBase32),
         codeType: "numeric", // otpauth:// URLs don't support providing alphanumeric as a type
-        hashAlgorithm: devTotpConfig.algorithm,
-        codeLength: devTotpConfig.digits,
-        timeStepSeconds: devTotpConfig.period,
+        hashAlgorithm: totpConfig.algorithm,
+        codeLength: totpConfig.digits,
+        timeStepSeconds: totpConfig.period,
       });
       defaultUsersWithTotpMfa.push({
         user,

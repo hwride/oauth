@@ -92,8 +92,12 @@ export function registerAuthorizationRoute(
         );
     }
 
-    // Challenge MFA if required.
-    if (clientConfig.requiresMfa) {
+    // Challenge MFA when the authenticated user has a registered TOTP factor.
+    if (
+      user.mfaRegistrations?.some(
+        (registration) => registration.type === "TOTP",
+      )
+    ) {
       // Save the pending authorization request in our store against a transaction ID.
       // Then when an MFA challenge is made, we can ensure it must match the correct transaction.
       const transactionId = randomUUID();

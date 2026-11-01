@@ -285,7 +285,7 @@ function registerTestRoute(
     routeDependencies.pendingAuthorizationStore,
     routeDependencies.authorizationCodeStore,
     routeDependencies.userStore,
-    routeDependencies.totpValidator,
+    () => routeDependencies.totpValidator,
   );
 }
 

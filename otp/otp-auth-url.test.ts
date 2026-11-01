@@ -30,6 +30,19 @@ test("totp with optional params", async () => {
   );
 });
 
+test("totp with a distinct issuer query param", async () => {
+  assert.strictEqual(
+    otpAuthUrl({
+      type: "totp",
+      issuer: "OAuth Dev",
+      issuerParam: "issuer.example.test",
+      accountName: "test@example.com",
+      secretBase32,
+    }),
+    `otpauth://totp/OAuth%20Dev%3Atest%40example.com?issuer=issuer.example.test&secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ`,
+  );
+});
+
 test("hotp with optional params", async () => {
   assert.strictEqual(
     otpAuthUrl({
