@@ -35,3 +35,7 @@ Here are a list of some relevant OAuth specifications for this project.
 ## OTP
 - (2005-12) [HOTP: An HMAC-Based One-Time Password Algorithm](https://www.rfc-editor.org/info/rfc4226/)
 - (2011-05) [TOTP: Time-Based One-Time Password Algorithm](https://www.rfc-editor.org/info/rfc6238/)
+- [Google Authenticator Key URI Format (otpauth://)](https://github.com/google/google-authenticator/wiki/Key-Uri-Format) (de facto format, not an RFC)
+
+## Encodings
+- (2006-10) [RFC 4648 The Base16, Base32, and Base64 Data Encodings](https://datatracker.ietf.org/doc/html/rfc4648)
