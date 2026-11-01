@@ -627,6 +627,7 @@ test("POST token endpoint returns an ID token when scope includes openid token",
   assert.equal(verified.payload.iss, defaultServerConfig.issuer);
   assert.equal(verified.payload.aud, "client-id-jwt");
   assert.equal(verified.payload.sub, "test-user-id");
+  assert.deepEqual(verified.payload.amr, ["pwd"]);
   assert.equal(verified.payload.name, undefined);
   assert.equal(typeof verified.payload.jti, "string");
   assert.notEqual(verified.payload.jti.length, 0);
@@ -1161,6 +1162,7 @@ function createAuthorizationCodeStoreWithCodeExpiresAtForClient(
   authorizationCodeStore.saveAuthorizationCode("test-auth-code", {
     clientId,
     subject,
+    amr: ["pwd"],
     redirectUri: "http://localhost:3000/callback",
     scope,
     nonce,
@@ -1185,6 +1187,7 @@ function createAuthorizationCodeStoreWithCodeAndPkce({
   authorizationCodeStore.saveAuthorizationCode("test-auth-code", {
     clientId,
     subject: "test-user-id",
+    amr: ["pwd"],
     redirectUri: "http://localhost:3000/callback",
     expiresAt,
     codeChallenge,

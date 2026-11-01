@@ -1,10 +1,14 @@
 import { randomUUID } from "node:crypto";
+import type {
+  AuthenticationMethodReference,
+} from "../types/authentication-method-reference.ts";
 
 export type RefreshTokenRecord = {
   clientId: string;
   resource?: string;
   scope?: string;
   subject: string;
+  amr?: AuthenticationMethodReference[];
   /** Unix time in ms */
   expiresAt: number;
 };

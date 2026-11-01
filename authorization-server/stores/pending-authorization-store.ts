@@ -1,8 +1,12 @@
 import type { AuthorizationRequest } from "../types/authorization-request.ts";
+import type {
+  AuthenticationMethodReference,
+} from "../types/authentication-method-reference.ts";
 
 export type PendingAuthorizationRecord = {
   authorizationRequest: AuthorizationRequest;
   subject: string;
+  amr: AuthenticationMethodReference[];
   /** Unix time in ms */
   expiresAt: number;
   mfaFailedAttempts: number;

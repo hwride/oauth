@@ -14,6 +14,9 @@ import type {
   AuthorizationRequest,
   AuthorizationRequestError,
 } from "../types/authorization-request.ts";
+import type {
+  AuthenticationMethodReference,
+} from "../types/authentication-method-reference.ts";
 import { getAllowedScopesForUser } from "../utils/rbac-utils.ts";
 
 type AuthorizeQueryParams = {
@@ -104,6 +107,8 @@ export function registerAuthorizationRoute(
       pendingAuthorizationStore.savePendingAuthorization(transactionId, {
         authorizationRequest,
         subject: user.userId,
+        // Password authentication, represented by RFC 8176's "pwd" AMR value.
+        amr: ["pwd"],
         mfaFailedAttempts: 0,
         expiresAt:
           Date.now() + serverConfig.mfaTransactionLifetimeSeconds * 1000,
@@ -117,6 +122,8 @@ export function registerAuthorizationRoute(
         authorizationCodeStore,
         authorizationRequest,
         user,
+        // Password authentication, represented by RFC 8176's "pwd" AMR value.
+        ["pwd"],
       ),
     );
   });
@@ -341,11 +348,13 @@ export function createAuthorizationRedirectUrl(
   authorizationCodeStore: AuthorizationCodeStore,
   authorizationRequest: AuthorizationRequest,
   user: UserRecord,
+  amr: AuthenticationMethodReference[],
 ) {
   const code = randomUUID();
   authorizationCodeStore.saveAuthorizationCode(code, {
     clientId: authorizationRequest.clientId,
     subject: user.userId,
+    amr,
     redirectUri: authorizationRequest.redirectUri,
     scope: filterAllowedScopes(
       authorizationRequest.scope,

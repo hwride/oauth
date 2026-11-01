@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createPendingAuthorizationStore } from "./pending-authorization-store.ts";
+import {
+  createPendingAuthorizationStore,
+  type PendingAuthorizationRecord,
+} from "./pending-authorization-store.ts";
 
 const transactionId = "00000000-0000-4000-8000-000000000001";
 
@@ -70,7 +73,9 @@ test("pending authorization store removes a transaction after the maximum failed
   assert.equal(store.recordFailedMfaAttempt(transactionId, 5), "not_found");
 });
 
-function createRecord(expiresAt = Date.now() + 60_000) {
+function createRecord(
+  expiresAt = Date.now() + 60_000,
+): PendingAuthorizationRecord {
   return {
     authorizationRequest: {
       clientId: "client-id-opaque",
@@ -78,6 +83,7 @@ function createRecord(expiresAt = Date.now() + 60_000) {
       responseType: "code",
     },
     subject: "test-user",
+    amr: ["pwd"],
     mfaFailedAttempts: 0,
     expiresAt,
   };

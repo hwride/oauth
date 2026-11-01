@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAuthorizationCodeStore } from "./authorization-code-store.ts";
+import {
+  createAuthorizationCodeStore,
+  type AuthorizationCodeRecord,
+} from "./authorization-code-store.ts";
 
 test("authorization code store saves and loads authorization code records", function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
-  const authorizationCodeRecord = {
+  const authorizationCodeRecord: AuthorizationCodeRecord = {
     clientId: "client-id-opaque",
     subject: "test-user",
+    amr: ["pwd"],
     redirectUri: "http://localhost:3000/callback",
     expiresAt: Date.now() + 60_000,
   };
@@ -46,6 +50,7 @@ test("authorization code store deletes stored authorization codes", function () 
   authorizationCodeStore.saveAuthorizationCode("test-auth-code", {
     clientId: "client-id-opaque",
     subject: "test-user",
+    amr: ["pwd"],
     redirectUri: "http://localhost:3000/callback",
     expiresAt: Date.now() + 60_000,
   });
