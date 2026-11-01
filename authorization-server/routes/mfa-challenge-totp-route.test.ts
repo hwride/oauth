@@ -25,6 +25,8 @@ test("GET TOTP MFA challenge route renders an OTP form", async () => {
 
     assert.equal(response.statusCode, 200);
     assert.match(response.headers["content-type"] ?? "", /^text\/html/);
+    assert.equal(response.headers["cache-control"], "no-store");
+    assert.equal(response.headers["referrer-policy"], "no-referrer");
     assert.match(response.body, /<title>TOTP MFA challenge<\/title>/);
     assert.match(
       response.body,

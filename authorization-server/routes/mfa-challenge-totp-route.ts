@@ -54,6 +54,9 @@ export function registerMfaChallengeTotpRoute(
   fastify.get<{
     Querystring: MfaChallengeQueryParams;
   }>("/mfa-challenge-totp", async function (request, reply) {
+    // Ensure transaction ID is not leaked.
+    reply.header("cache-control", "no-store");
+    reply.header("referrer-policy", "no-referrer");
     const { tx } = request.query;
     const validationResult = validateMfaChallengeTransaction(
       tx,
@@ -81,6 +84,9 @@ export function registerMfaChallengeTotpRoute(
       code?: string;
     };
   }>("/mfa-challenge-totp", async function (request, reply) {
+    // Ensure transaction ID is not leaked.
+    reply.header("cache-control", "no-store");
+    reply.header("referrer-policy", "no-referrer");
     const { tx } = request.query;
     const validationResult = validateMfaChallengeTransaction(
       tx,
@@ -241,6 +247,7 @@ function createDefaultTotpValidator(
     hashAlgorithm: totpConfig.algorithm,
     codeLength: totpConfig.digits,
     timeStepSeconds: totpConfig.period,
+    allowedTimeSteps: totpConfig.allowedTimeSteps,
   });
 }
 
