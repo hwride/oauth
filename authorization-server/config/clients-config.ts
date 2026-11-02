@@ -29,7 +29,7 @@ type ClientConfigAuth =
 const accessTokenLifetimeSeconds = 60 * 60;
 const idTokenLifetimeSeconds = 60 * 60;
 const refreshTokenLifetimeSeconds = 60 * 60 * 24 * 2;
-const defaultClientBase = "http://localhost:3000";
+const defaultClientBase = `http://localhost:${process.env.CLIENT_PORT ?? 3000}`;
 
 export const clientsConfig: ClientConfig[] = [
   {
