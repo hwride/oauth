@@ -1,3 +1,4 @@
+import type { ServerContext } from "../server-context.ts";
 import { createHash, randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { type JWTPayload, SignJWT } from "jose";
@@ -7,9 +8,7 @@ import type { AuthorizationCodeStore } from "../stores/authorization-code-store.
 import type { RefreshTokenStore } from "../stores/refresh-token-store.ts";
 import type { AccessTokenRecord, TokenStore } from "../stores/token-store.ts";
 import type { UserStore } from "../stores/user-store.ts";
-import type {
-  AuthenticationMethodReference,
-} from "../types/authentication-method-reference.ts";
+import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
 
 type TokenRequestBody = {
   grant_type?: string;
@@ -51,11 +50,13 @@ type RefreshTokenGrantResponse = {
  */
 export function registerTokenRoute(
   fastify: FastifyInstance,
-  serverConfig: ServerConfig,
-  authorizationCodeStore: AuthorizationCodeStore,
-  tokenStore: TokenStore,
-  refreshTokenStore: RefreshTokenStore,
-  userStore: UserStore,
+  {
+    serverConfig,
+    authorizationCodeStore,
+    tokenStore,
+    refreshTokenStore,
+    userStore,
+  }: ServerContext,
 ) {
   const tokenEndpointPath = new URL(serverConfig.tokenEndpoint).pathname;
 

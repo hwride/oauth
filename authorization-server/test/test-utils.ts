@@ -1,3 +1,4 @@
+import { createServerContext, type ServerContext } from "../server-context.ts";
 import { generateKeyPair } from "jose";
 import type { ServerConfig } from "../config/server-config.ts";
 
@@ -24,4 +25,11 @@ export function getTestServerConfig(
     ...defaultServerConfig,
     ...overrides,
   };
+}
+
+export function getTestServerContext(overrides: Partial<ServerContext> = {}) {
+  return createServerContext({
+    serverConfig: getTestServerConfig(),
+    ...overrides,
+  });
 }

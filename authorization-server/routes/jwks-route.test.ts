@@ -4,7 +4,7 @@ import { createServer } from "../server.ts";
 import { getTestServerConfig } from "../test/test-utils.ts";
 
 test("GET /.well-known/jwks.json returns the signing JWK", async function () {
-  const fastify = await createServer(getTestServerConfig());
+  const fastify = await createServer({ serverConfig: getTestServerConfig() });
 
   const address = await fastify.listen({
     host: "127.0.0.1",

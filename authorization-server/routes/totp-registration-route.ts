@@ -1,9 +1,9 @@
+import type { ServerContext } from "../server-context.ts";
 import QRCode from "qrcode";
 import type { FastifyInstance } from "fastify";
 import { otpAuthUrl } from "../../otp/otp-auth-url.ts";
 import { totpConfig } from "../config/totp-config.ts";
 import { defaultUsers } from "../default-users.ts";
-import type { ServerConfig } from "../config/server-config.ts";
 import type { MfaRegistration, UserRecord } from "../stores/user-store.ts";
 import {
   createTimeBasedOneTimePasswordValidator,
@@ -13,7 +13,7 @@ import { fromBase32 } from "../../util/base-encoding.ts";
 
 export function registerTotpRegistrationRoute(
   fastify: FastifyInstance,
-  serverConfig: ServerConfig,
+  { serverConfig }: ServerContext,
 ) {
   fastify.get("/dev/totp-registration", async function (_, reply) {
     const issuerParam = new URL(serverConfig.issuer).hostname;

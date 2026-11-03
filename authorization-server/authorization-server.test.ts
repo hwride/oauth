@@ -36,11 +36,11 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
   assert.ok(totpMfaRegistration);
   const codeVerifier = "mfa-code-verifier";
 
-  const fastify = await createServer(
-    defaultServerConfig,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     pendingAuthorizationStore,
     authorizationCodeStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -157,12 +157,11 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
 test("authorization code can be issued and exchanged for an opaque access token", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -219,12 +218,11 @@ test("authorization code can be issued and exchanged for an opaque access token"
 test("authorization code can be issued and exchanged for a jwt access token verified via the auth server jwks url", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -297,12 +295,11 @@ test("authorization code can be issued and exchanged for a jwt access token veri
 test("authorization code flow supports PKCE and state together", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -385,12 +382,11 @@ test("authorization code flow supports PKCE and state together", async function 
 test("OIDC authorization code flow with nonce", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -508,12 +504,11 @@ test("OIDC authorization code flow with nonce", async function () {
 test("OIDC refresh token flow returns new access and ID tokens", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -629,13 +624,12 @@ test("signup route creates a user who can then log in and receive a valid jwt ac
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
   const userStore = createUserStore([]);
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
     userStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,

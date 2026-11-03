@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Fastify from "fastify";
-import { getTestServerConfig } from "../test/test-utils.ts";
+import { getTestServerContext } from "../test/test-utils.ts";
 import { registerTotpRegistrationRoute } from "./totp-registration-route.ts";
 
 test("TOTP registration route renders a stable development QR code", async () => {
   const fastify = Fastify();
-  registerTotpRegistrationRoute(fastify, getTestServerConfig());
+  registerTotpRegistrationRoute(fastify, await getTestServerContext());
 
   try {
     const response = await fastify.inject({

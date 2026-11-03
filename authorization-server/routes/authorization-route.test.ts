@@ -694,13 +694,11 @@ async function fetchAuthorizationLoginPage(
   authorizationCodeStore: AuthorizationCodeStore = createAuthorizationCodeStore(),
   userStore: UserStore = createUserStore(defaultUsers()),
 ) {
-  const fastify = await createServer(
+  const fastify = await createServer({
     serverConfig,
-    undefined,
     authorizationCodeStore,
-    undefined,
     userStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -733,14 +731,12 @@ async function submitAuthorizationLogin(
   userStore: UserStore = createUserStore(defaultUsers()),
   pendingAuthorizationStore: PendingAuthorizationStore = createPendingAuthorizationStore(),
 ) {
-  const fastify = await createServer(
+  const fastify = await createServer({
     serverConfig,
     pendingAuthorizationStore,
     authorizationCodeStore,
-    undefined,
     userStore,
-    undefined,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,

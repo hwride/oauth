@@ -1,9 +1,9 @@
+import type { ServerContext } from "../server-context.ts";
 import type { FastifyInstance } from "fastify";
-import type { ServerConfig } from "../config/server-config.ts";
 
 export function registerOpenIdConfigurationRoute(
   fastify: FastifyInstance,
-  serverConfig: ServerConfig,
+  { serverConfig }: ServerContext,
 ) {
   // OAuth 2.0 Authorization Server Metadata
   // https://datatracker.ietf.org/doc/html/rfc8414

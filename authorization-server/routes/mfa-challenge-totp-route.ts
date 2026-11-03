@@ -1,3 +1,4 @@
+import type { ServerContext } from "../server-context.ts";
 import { type FastifyInstance } from "fastify";
 import {
   createTimeBasedOneTimePasswordValidator,
@@ -15,7 +16,6 @@ import type {
   UserRecord,
   UserStore,
 } from "../stores/user-store.ts";
-import type { AuthorizationCodeStore } from "../stores/authorization-code-store.ts";
 import { fromBase32 } from "../../util/base-encoding.ts";
 import { totpConfig } from "../config/totp-config.ts";
 
@@ -25,10 +25,12 @@ type MfaChallengeQueryParams = {
 
 export function registerMfaChallengeTotpRoute(
   fastify: FastifyInstance,
-  serverConfig: ServerConfig,
-  pendingAuthorizationStore: PendingAuthorizationStore,
-  authorizationCodeStore: AuthorizationCodeStore,
-  userStore: UserStore,
+  {
+    serverConfig,
+    pendingAuthorizationStore,
+    authorizationCodeStore,
+    userStore,
+  }: ServerContext,
   /** Function to create a TOTP validator. Mainly exposed for overwriting for test convenience. */
   createTotpValidator: (
     registration: MfaRegistration,
