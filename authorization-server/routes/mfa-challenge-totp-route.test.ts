@@ -1,3 +1,4 @@
+import { getTestServerContext } from "../test/test-utils.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import formbody from "@fastify/formbody";
@@ -15,7 +16,7 @@ test("GET TOTP MFA challenge route renders an OTP form", async () => {
   const fastify = Fastify();
   await fastify.register(formbody);
   const routeDependencies = setupRoute();
-  registerTestRoute(fastify, routeDependencies);
+  await registerTestRoute(fastify, routeDependencies);
 
   try {
     const response = await fastify.inject({
@@ -48,7 +49,7 @@ test("GET TOTP MFA challenge route does not echo an invalid transaction ID", asy
   const fastify = Fastify();
   await fastify.register(formbody);
   const routeDependencies = setupRoute();
-  registerTestRoute(fastify, routeDependencies);
+  await registerTestRoute(fastify, routeDependencies);
 
   try {
     const response = await fastify.inject({
@@ -72,7 +73,7 @@ test("POST TOTP MFA challenge route accepts an OTP code", async () => {
   const fastify = Fastify();
   await fastify.register(formbody);
   const routeDependencies = setupRoute();
-  registerTestRoute(fastify, routeDependencies);
+  await registerTestRoute(fastify, routeDependencies);
 
   try {
     const response = await submitCode(fastify, transactionId, "123456");
@@ -93,7 +94,7 @@ test("POST TOTP MFA challenge route rejects an invalid code without consuming th
   const fastify = Fastify();
   await fastify.register(formbody);
   const routeDependencies = setupRoute();
-  registerTestRoute(fastify, routeDependencies);
+  await registerTestRoute(fastify, routeDependencies);
 
   try {
     const response = await submitCode(fastify, transactionId, "000000");
@@ -116,7 +117,7 @@ test("POST TOTP MFA challenge route treats a missing code as invalid", async () 
   const fastify = Fastify();
   await fastify.register(formbody);
   const routeDependencies = setupRoute();
-  registerTestRoute(fastify, routeDependencies);
+  await registerTestRoute(fastify, routeDependencies);
 
   try {
     const response = await submitCode(fastify);
@@ -132,7 +133,7 @@ test("POST TOTP MFA challenge route removes a transaction after five invalid att
   const fastify = Fastify();
   await fastify.register(formbody);
   const routeDependencies = setupRoute();
-  registerTestRoute(fastify, routeDependencies);
+  await registerTestRoute(fastify, routeDependencies);
 
   try {
     const responses = [];
@@ -164,7 +165,7 @@ test("MFA challenge route rejects an unknown transaction without echoing it", as
   const fastify = Fastify();
   await fastify.register(formbody);
   const routeDependencies = setupRoute();
-  registerTestRoute(fastify, routeDependencies);
+  await registerTestRoute(fastify, routeDependencies);
   const unknownTransactionId = "00000000-0000-4000-8000-000000000002";
 
   try {
@@ -182,7 +183,7 @@ test("MFA challenge route rejects an expired transaction", async () => {
   const fastify = Fastify();
   await fastify.register(formbody);
   const routeDependencies = setupRoute(Date.now() - 1);
-  registerTestRoute(fastify, routeDependencies);
+  await registerTestRoute(fastify, routeDependencies);
 
   try {
     const response = await fastify.inject({
@@ -202,7 +203,7 @@ test("MFA challenge route rejects a deleted user without consuming the transacti
   await fastify.register(formbody);
   const routeDependencies = setupRoute();
   routeDependencies.userStore.loadUserById = () => undefined;
-  registerTestRoute(fastify, routeDependencies);
+  await registerTestRoute(fastify, routeDependencies);
 
   try {
     const response = await submitCode(fastify, transactionId, "123456");
@@ -226,7 +227,7 @@ test("MFA challenge route does not issue an authorization code when transaction 
   const routeDependencies = setupRoute();
   routeDependencies.pendingAuthorizationStore.deletePendingAuthorization = () =>
     false;
-  registerTestRoute(fastify, routeDependencies);
+  await registerTestRoute(fastify, routeDependencies);
 
   try {
     const response = await submitCode(fastify, transactionId, "123456");
@@ -243,7 +244,7 @@ test("MFA challenge route rejects replay after successful consumption", async ()
   const fastify = Fastify();
   await fastify.register(formbody);
   const routeDependencies = setupRoute();
-  registerTestRoute(fastify, routeDependencies);
+  await registerTestRoute(fastify, routeDependencies);
 
   try {
     const firstResponse = await submitCode(fastify, transactionId, "123456");
@@ -265,7 +266,7 @@ test("MFA challenge route allows only one concurrent request to complete a trans
     await new Promise((resolve) => setTimeout(resolve, 10));
     return { isValid: true };
   };
-  registerTestRoute(fastify, routeDependencies);
+  await registerTestRoute(fastify, routeDependencies);
 
   try {
     const responses = await Promise.all([
@@ -311,16 +312,18 @@ function setupRoute(expiresAt = Date.now() + 60_000) {
   };
 }
 
-function registerTestRoute(
+async function registerTestRoute(
   fastify: FastifyInstance,
   routeDependencies: ReturnType<typeof setupRoute>,
 ) {
   registerMfaChallengeTotpRoute(
     fastify,
-    getTestServerConfig(),
-    routeDependencies.pendingAuthorizationStore,
-    routeDependencies.authorizationCodeStore,
-    routeDependencies.userStore,
+    await getTestServerContext({
+      serverConfig: getTestServerConfig(),
+      pendingAuthorizationStore: routeDependencies.pendingAuthorizationStore,
+      authorizationCodeStore: routeDependencies.authorizationCodeStore,
+      userStore: routeDependencies.userStore,
+    }),
     () => routeDependencies.totpValidator,
   );
 }

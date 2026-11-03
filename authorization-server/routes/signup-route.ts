@@ -1,6 +1,5 @@
+import type { ServerContext } from "../server-context.ts";
 import type { FastifyInstance } from "fastify";
-import type { ServerConfig } from "../config/server-config.ts";
-import type { UserStore } from "../stores/user-store.ts";
 
 type SignupPageQueryParams = {
   client_id?: string;
@@ -17,8 +16,7 @@ type SignupPageQueryParams = {
 
 export function registerSignupRoute(
   fastify: FastifyInstance,
-  serverConfig: ServerConfig,
-  userStore: UserStore,
+  { serverConfig, userStore }: ServerContext,
 ) {
   const authorizationEndpointPath = new URL(serverConfig.authorizationEndpoint)
     .pathname;

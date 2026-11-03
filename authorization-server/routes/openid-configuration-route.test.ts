@@ -45,7 +45,7 @@ test("GET /.well-known/openid-configuration uses endpoint overrides when provide
 });
 
 async function fetchOpenIdConfiguration(serverConfig: ServerConfig) {
-  const fastify = await createServer(serverConfig);
+  const fastify = await createServer({ serverConfig });
 
   const address = await fastify.listen({
     host: "127.0.0.1",

@@ -1,3 +1,4 @@
+import type { ServerContext } from "../server-context.ts";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { clientsConfig, type ClientConfig } from "../config/clients-config.ts";
@@ -8,15 +9,12 @@ import {
 } from "../config/resources-config.ts";
 import type { ServerConfig } from "../config/server-config.ts";
 import type { AuthorizationCodeStore } from "../stores/authorization-code-store.ts";
-import { type PendingAuthorizationStore } from "../stores/pending-authorization-store.ts";
 import type { UserRecord, UserStore } from "../stores/user-store.ts";
 import type {
   AuthorizationRequest,
   AuthorizationRequestError,
 } from "../types/authorization-request.ts";
-import type {
-  AuthenticationMethodReference,
-} from "../types/authentication-method-reference.ts";
+import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
 import { getAllowedScopesForUser } from "../utils/rbac-utils.ts";
 
 type AuthorizeQueryParams = {
@@ -33,10 +31,12 @@ type AuthorizeQueryParams = {
 
 export function registerAuthorizationRoute(
   fastify: FastifyInstance,
-  serverConfig: ServerConfig,
-  pendingAuthorizationStore: PendingAuthorizationStore,
-  authorizationCodeStore: AuthorizationCodeStore,
-  userStore: UserStore,
+  {
+    serverConfig,
+    pendingAuthorizationStore,
+    authorizationCodeStore,
+    userStore,
+  }: ServerContext,
 ) {
   const authorizationEndpointPath = new URL(serverConfig.authorizationEndpoint)
     .pathname;

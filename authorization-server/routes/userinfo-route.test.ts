@@ -147,7 +147,7 @@ async function fetchUserinfo(
   authorizationHeader?: string,
   method: "GET" | "POST" = "GET",
 ): Promise<UserinfoResponse> {
-  const fastify = await createServer(defaultServerConfig);
+  const fastify = await createServer({ serverConfig: defaultServerConfig });
 
   try {
     return await fastify.inject({

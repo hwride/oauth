@@ -1,8 +1,8 @@
+import { createServerContext, type ServerContext } from "./server-context.ts";
 import formbody from "@fastify/formbody";
 import Fastify, { type FastifyInstance } from "fastify";
-import { clientsConfig, type ClientConfig } from "./config/clients-config.ts";
-import { getServerConfig, type ServerConfig } from "./config/server-config.ts";
-import { defaultUsers } from "./default-users.ts";
+import { clientsConfig } from "./config/clients-config.ts";
+import type { ServerConfig } from "./config/server-config.ts";
 import { registerAuthorizationRoute } from "./routes/authorization-route.ts";
 import { registerJwksRoute } from "./routes/jwks-route.ts";
 import { registerOpenIdConfigurationRoute } from "./routes/openid-configuration-route.ts";
@@ -11,23 +11,6 @@ import { registerTokenRoute } from "./routes/token-route.ts";
 import { registerTotpRegistrationRoute } from "./routes/totp-registration-route.ts";
 import { registerMfaChallengeTotpRoute } from "./routes/mfa-challenge-totp-route.ts";
 import { registerUserinfoRoute } from "./routes/userinfo-route.ts";
-import {
-  createAuthorizationCodeStore,
-  type AuthorizationCodeStore,
-} from "./stores/authorization-code-store.ts";
-import {
-  createPendingAuthorizationStore,
-  type PendingAuthorizationStore,
-} from "./stores/pending-authorization-store.ts";
-import {
-  createRefreshTokenStore,
-  type RefreshTokenStore,
-} from "./stores/refresh-token-store.ts";
-import { createTokenStore, type TokenStore } from "./stores/token-store.ts";
-import { createUserStore, type UserStore } from "./stores/user-store.ts";
-import { createTimeBasedOneTimePasswordValidator } from "../otp/time-based-one-time-password.ts";
-import { totpConfig } from "./config/totp-config.ts";
-import { fromBase32 } from "../util/base-encoding.ts";
 
 export const defaultAuthorizationServerPort = 4000;
 
@@ -50,17 +33,8 @@ export async function main() {
   }
 }
 
-export async function createServer(
-  serverConfig?: ServerConfig,
-  pendingAuthorizationStore: PendingAuthorizationStore = createPendingAuthorizationStore(),
-  authorizationCodeStore: AuthorizationCodeStore = createAuthorizationCodeStore(),
-  tokenStore: TokenStore = createTokenStore(),
-  userStore: UserStore = createUserStore(defaultUsers()),
-  refreshTokenStore?: RefreshTokenStore,
-) {
-  const resolvedServerConfig = serverConfig ?? (await getServerConfig());
-  const resolvedRefreshTokenStore =
-    refreshTokenStore ?? createRefreshTokenStore();
+export async function createServer(overrides: Partial<ServerContext> = {}) {
+  const context = await createServerContext(overrides);
   const fastify = Fastify({
     logger: {
       transport: {
@@ -74,37 +48,18 @@ export async function createServer(
     disableRequestLogging: true,
   });
 
-  logAuthorizationServerConfig(fastify, resolvedServerConfig);
+  logAuthorizationServerConfig(fastify, context.serverConfig);
 
   fastify.register(formbody);
 
-  registerOpenIdConfigurationRoute(fastify, resolvedServerConfig);
-  registerAuthorizationRoute(
-    fastify,
-    resolvedServerConfig,
-    pendingAuthorizationStore,
-    authorizationCodeStore,
-    userStore,
-  );
-  registerSignupRoute(fastify, resolvedServerConfig, userStore);
-  registerTokenRoute(
-    fastify,
-    resolvedServerConfig,
-    authorizationCodeStore,
-    tokenStore,
-    resolvedRefreshTokenStore,
-    userStore,
-  );
-  registerTotpRegistrationRoute(fastify, resolvedServerConfig);
-  registerMfaChallengeTotpRoute(
-    fastify,
-    resolvedServerConfig,
-    pendingAuthorizationStore,
-    authorizationCodeStore,
-    userStore,
-  );
-  registerJwksRoute(fastify, resolvedServerConfig);
-  registerUserinfoRoute(fastify, resolvedServerConfig, userStore);
+  registerOpenIdConfigurationRoute(fastify, context);
+  registerAuthorizationRoute(fastify, context);
+  registerSignupRoute(fastify, context);
+  registerTokenRoute(fastify, context);
+  registerTotpRegistrationRoute(fastify, context);
+  registerMfaChallengeTotpRoute(fastify, context);
+  registerJwksRoute(fastify, context);
+  registerUserinfoRoute(fastify, context);
 
   return fastify;
 }

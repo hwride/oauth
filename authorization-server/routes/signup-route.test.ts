@@ -144,11 +144,10 @@ async function fetchSignupPage(
   queryParams: Record<string, string>,
   serverConfig: ServerConfig = defaultServerConfig,
 ) {
-  const fastify = await createServer(
+  const fastify = await createServer({
     serverConfig,
-    undefined,
-    createAuthorizationCodeStore(),
-  );
+    authorizationCodeStore: createAuthorizationCodeStore(),
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -169,13 +168,11 @@ async function submitSignupForm(
   userStore = createUserStore(),
   serverConfig: ServerConfig = defaultServerConfig,
 ) {
-  const fastify = await createServer(
+  const fastify = await createServer({
     serverConfig,
-    undefined,
-    createAuthorizationCodeStore(),
-    undefined,
+    authorizationCodeStore: createAuthorizationCodeStore(),
     userStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,

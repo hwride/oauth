@@ -17,12 +17,11 @@ const defaultServerConfig = getTestServerConfig();
 test("authorization code flow defaults access token aud to issuer when no resource indicator is requested", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -57,12 +56,11 @@ test("authorization code flow defaults access token aud to issuer when no resour
 test("authorization code flow sets access token aud to orders API resource when resource indicator is requested without openid scope", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -99,12 +97,11 @@ test("authorization code flow sets access token aud to orders API resource when 
 test("authorization code flow sets access token aud to requested resource indicator", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -141,12 +138,11 @@ test("authorization code flow sets access token aud to requested resource indica
 test("authorization code flow includes issuer and orders API resource audiences when openid scope and resource indicator are requested", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -187,12 +183,11 @@ test("authorization code flow includes issuer and orders API resource audiences 
 test("refresh token flow preserves resource audience from the original authorization request", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -249,12 +244,11 @@ test("refresh token flow preserves resource audience from the original authoriza
 test("authorization endpoint rejects unknown resource indicators", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -279,13 +273,12 @@ test("authorization endpoint rejects unknown resource indicators", async functio
 test("authorization code flow filters scopes by allowed scopes for the requested resource", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-    createUserStoreWithoutMfa(),
-  );
+    userStore: createUserStoreWithoutMfa(),
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -325,12 +318,11 @@ test("authorization code flow filters scopes by allowed scopes for the requested
 test("OIDC scopes are not filtered by user or resource scope filtering", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
@@ -363,13 +355,12 @@ test("OIDC scopes are not filtered by user or resource scope filtering", async f
 test("authorization code flow keeps scopes allowed by the requested resource and user", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
-  const fastify = await createServer(
-    defaultServerConfig,
-    undefined,
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
     authorizationCodeStore,
     tokenStore,
-    createUserStoreWithoutMfa(),
-  );
+    userStore: createUserStoreWithoutMfa(),
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,

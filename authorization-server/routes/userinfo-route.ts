@@ -1,3 +1,4 @@
+import type { ServerContext } from "../server-context.ts";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { jwtVerify } from "jose";
 import type { ServerConfig } from "../config/server-config.ts";
@@ -10,8 +11,7 @@ const bearerChallenge = `Bearer realm="userinfo"`;
  */
 export function registerUserinfoRoute(
   fastify: FastifyInstance,
-  serverConfig: ServerConfig,
-  userStore: UserStore,
+  { serverConfig, userStore }: ServerContext,
 ) {
   fastify.get("/userinfo", async function (request, reply) {
     return await handleUserinfoRequest(request, reply, serverConfig, userStore);

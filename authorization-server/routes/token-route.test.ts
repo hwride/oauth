@@ -1082,14 +1082,13 @@ async function fetchTokenEndpoint(
   refreshTokenStore: RefreshTokenStore = createRefreshTokenStore(),
   userStore: UserStore = createUserStore(),
 ) {
-  const fastify = await createServer(
+  const fastify = await createServer({
     serverConfig,
-    undefined,
     authorizationCodeStore,
     tokenStore,
     userStore,
     refreshTokenStore,
-  );
+  });
   const address = await fastify.listen({
     host: "127.0.0.1",
     port: 0,
