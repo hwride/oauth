@@ -4,6 +4,8 @@
   "type": "module",
   "version": "1.0.0",
   "scripts": {
+    "conformance:up": "docker compose -f conformance/compose.yml up",
+    "conformance:down": "docker compose -f conformance/compose.yml down",
     "dev": "node scripts/dev.ts",
     "test": "node --test otp/*.test.ts util/*.test.ts",
     "types": "tsc --noEmit",
