@@ -1,36 +1,105 @@
 import type { AuthorizationRequest } from "../types/authorization-request.ts";
-import type {
-  AuthenticationMethodReference,
-} from "../types/authentication-method-reference.ts";
+import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
+import { randomUUID } from "node:crypto";
 
 export type PendingAuthorizationRecord = {
+  /**
+   * Stage authorization is on.
+   */
+  stage: "login" | "mfa";
+  /**
+   * Original authorization reques submitted.
+   */
   authorizationRequest: AuthorizationRequest;
-  subject: string;
+  /**
+   * User ID associated with the pending authorization. May be empty before we learn the user.
+   */
+  userId?: string;
+  /**
+   * What authentication methods were used as part of this authorization request. Can be added
+   * to as the transaction progresses.
+   */
   amr: AuthenticationMethodReference[];
-  /** Unix time in ms */
+  /**
+   * Unix time in ms
+   */
   expiresAt: number;
+  /**
+   * The number of times an MFA attempt has failed for this pending authorization.
+   */
   mfaFailedAttempts: number;
 };
 
-export type RecordMfaAttemptResult = "recorded" | "exhausted" | "not_found";
+/**
+ * Result of applying an atomic pending-authorization update:
+ * - `updated`: the callback returned a replacement record and it was saved.
+ * - `deleted`: the callback requested that the transaction be removed.
+ * - `not_found`: the transaction is missing or expired.
+ * - `invalid_stage`: the transaction exists but is not in the expected stage.
+ */
+export type UpdatePendingAuthorizationResult =
+  | "updated"
+  | "deleted"
+  | "not_found"
+  | "invalid_stage";
 
 /**
  * This is a store for saving the state of pending authorization requests. I.e. authorization requests that
- * have started but not yet completed, because they may be pending on something like MFA.
+ * have started but not yet completed, e.g. waiting for login or MFA.
  */
 export type PendingAuthorizationStore = {
-  savePendingAuthorization(
-    transactionId: string,
-    record: PendingAuthorizationRecord,
-  ): void;
+  /**
+   * Create a new pending authorization record.
+   *
+   * @returns The transaction ID this record corresponds to.
+   */
+  newPendingAuthorization(record: PendingAuthorizationRecord): string;
+
+  /**
+   * Load a pending authorization record.
+   * If the record has expired will be removed and return undefined.
+   *
+   * @param transactionId Transaction ID of the record to load.
+   */
   loadPendingAuthorization(
     transactionId: string | null | undefined,
   ): PendingAuthorizationRecord | undefined;
+
+  /**
+   * Delete a pending authorization record.
+   *
+   * @param transactionId Transaction ID of the record to delete.
+   * @returns True if the delete was successful. Note if a record expired it does not count as a successful delete
+   * if the record no longer exists or was expired. This is important, because it gives you a final change to deny
+   * a request due to a missing authorization record, which may have been consumed by another request, preventing
+   * race conditions allowing a transaction to be used twice.
+   */
   deletePendingAuthorization(transactionId: string | null | undefined): boolean;
-  recordFailedMfaAttempt(
+
+  /**
+   * Atomically updates a pending authorization record.
+   *
+   * @param transactionId Transaction ID to update.
+   * @param expectedStage Expected current stage; the update is rejected when it does not match.
+   * @param update Callback to update the record. Note this must be synchronous to ensure an atomic update.
+   * Return a new PendingAuthorizationRecord if updating, or "delete" if the record should be deleted.
+   * @returns
+   * - `"updated"`: The record was successfully updated.
+   * - `"deleted"`: The record was successfully removed.
+   * - `"not_found"`: The transaction is missing or expired.
+   * - `"invalid_stage"`: The transaction stage does not match.
+   */
+  updatePendingAuthorization(
     transactionId: string | null | undefined,
-    maxAttempts: number,
-  ): RecordMfaAttemptResult;
+    expectedStage: PendingAuthorizationRecord["stage"],
+    update: (
+      record: Readonly<PendingAuthorizationRecord>,
+    ) => PendingAuthorizationRecord | "delete",
+  ): UpdatePendingAuthorizationResult;
+
+  /**
+   * Returns true if there are no pending authorization records.
+   */
   isEmpty(): boolean;
 };
 
@@ -38,8 +107,43 @@ export function createPendingAuthorizationStore(): PendingAuthorizationStore {
   const pendingAuthorizations = new Map<string, PendingAuthorizationRecord>();
 
   return {
-    savePendingAuthorization(transactionId, record) {
+    newPendingAuthorization(record) {
+      let transactionId: string;
+      do {
+        transactionId = randomUUID();
+      } while (pendingAuthorizations.has(transactionId));
+
       pendingAuthorizations.set(transactionId, record);
+      return transactionId;
+    },
+
+    updatePendingAuthorization(transactionId, expectedStage, update) {
+      if (transactionId == null) {
+        return "not_found";
+      }
+
+      const currentRecord = pendingAuthorizations.get(transactionId);
+      if (!currentRecord) {
+        return "not_found";
+      }
+
+      if (currentRecord.expiresAt <= Date.now()) {
+        pendingAuthorizations.delete(transactionId);
+        return "not_found";
+      }
+
+      if (currentRecord.stage !== expectedStage) {
+        return "invalid_stage";
+      }
+
+      const updatedRecord = update(currentRecord);
+      if (updatedRecord === "delete") {
+        pendingAuthorizations.delete(transactionId);
+        return "deleted";
+      }
+
+      pendingAuthorizations.set(transactionId, updatedRecord);
+      return "updated";
     },
 
     loadPendingAuthorization(transactionId) {
@@ -78,35 +182,6 @@ export function createPendingAuthorizationStore(): PendingAuthorizationStore {
       }
 
       return pendingAuthorizations.delete(transactionId);
-    },
-
-    recordFailedMfaAttempt(transactionId, maxAttempts) {
-      if (transactionId == null) {
-        return "not_found";
-      }
-
-      const record = pendingAuthorizations.get(transactionId);
-      if (!record) {
-        return "not_found";
-      }
-
-      // Re-check expiry before recording the attempt, since the transaction may
-      // have expired after the route initially loaded it.
-      if (record.expiresAt <= Date.now()) {
-        pendingAuthorizations.delete(transactionId);
-        return "not_found";
-      }
-
-      const failedAttempts = record.mfaFailedAttempts + 1;
-      if (failedAttempts >= maxAttempts) {
-        // Incrementing and deleting are synchronous so the final attempt cannot
-        // race with another request in this process and leave the transaction usable.
-        pendingAuthorizations.delete(transactionId);
-        return "exhausted";
-      }
-
-      record.mfaFailedAttempts = failedAttempts;
-      return "recorded";
     },
 
     isEmpty() {

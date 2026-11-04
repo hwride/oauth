@@ -111,9 +111,20 @@ export function registerMfaChallengeTotpRoute(
         );
     }
 
-    const { authorizationRequest, subject, amr } =
+    const { authorizationRequest, userId, amr } =
       validationResult.pendingAuthorization;
-    const user = userStore.loadUserById(subject);
+    if (userId == null) {
+      return reply
+        .code(401)
+        .type("text/html; charset=utf-8")
+        .send(
+          renderMfaChallengeTotpPage({
+            tx,
+            errorText: "Login transaction is missing an authenticated user",
+          }),
+        );
+    }
+    const user = userStore.loadUserById(userId);
     if (user == null) {
       // This could happen if the user was deleted between a successful credential entry and completing MFA.
       return reply
@@ -146,11 +157,22 @@ export function registerMfaChallengeTotpRoute(
     const { isValid } = await totpValidator.validate(request.body.code);
 
     if (!isValid) {
-      const attemptResult = pendingAuthorizationStore.recordFailedMfaAttempt(
+      const updateResult = pendingAuthorizationStore.updatePendingAuthorization(
         tx,
-        serverConfig.mfaMaxAttempts,
+        "mfa",
+        (record) => {
+          const failedAttempts = record.mfaFailedAttempts + 1;
+          if (failedAttempts >= serverConfig.mfaMaxAttempts) {
+            return "delete";
+          }
+
+          return {
+            ...record,
+            mfaFailedAttempts: failedAttempts,
+          };
+        },
       );
-      if (attemptResult === "exhausted") {
+      if (updateResult === "deleted") {
         return reply
           .code(401)
           .type("text/html; charset=utf-8")
@@ -162,7 +184,7 @@ export function registerMfaChallengeTotpRoute(
           );
       }
 
-      if (attemptResult === "not_found") {
+      if (updateResult === "not_found") {
         return reply
           .code(401)
           .type("text/html; charset=utf-8")
@@ -170,6 +192,17 @@ export function registerMfaChallengeTotpRoute(
             renderMfaChallengeTotpPage({
               errorText:
                 "Login transaction has already been completed or expired.",
+            }),
+          );
+      }
+
+      if (updateResult === "invalid_stage") {
+        return reply
+          .code(401)
+          .type("text/html; charset=utf-8")
+          .send(
+            renderMfaChallengeTotpPage({
+              errorText: "Login transaction is not waiting for MFA.",
             }),
           );
       }
@@ -238,6 +271,14 @@ function validateMfaChallengeTransaction(
     return {
       ok: false,
       errorText: "Login transaction not found, please start your login again.",
+    };
+  }
+
+  if (pendingAuthorization.stage !== "mfa") {
+    return {
+      ok: false,
+      errorText:
+        "Login transaction is not waiting for MFA, please start your login again.",
     };
   }
 

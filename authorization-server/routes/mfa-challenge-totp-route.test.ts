@@ -10,7 +10,7 @@ import { createUserStore } from "../stores/user-store.ts";
 import { getTestServerConfig } from "../test/test-utils.ts";
 import { registerMfaChallengeTotpRoute } from "./mfa-challenge-totp-route.ts";
 
-const transactionId = "00000000-0000-4000-8000-000000000001";
+let transactionId: string;
 
 test("GET TOTP MFA challenge route renders an OTP form", async () => {
   const fastify = Fastify();
@@ -179,6 +179,40 @@ test("MFA challenge route rejects an unknown transaction without echoing it", as
   }
 });
 
+test("MFA challenge route rejects a transaction that is not waiting for MFA", async () => {
+  const fastify = Fastify();
+  await fastify.register(formbody);
+  const routeDependencies = setupRoute();
+  routeDependencies.pendingAuthorizationStore.updatePendingAuthorization(
+    transactionId,
+    "mfa",
+    () => ({
+      authorizationRequest: {
+        clientId: "client-id-opaque",
+        redirectUri: "http://localhost:3000/callback",
+        responseType: "code",
+      },
+      stage: "login",
+      amr: [],
+      mfaFailedAttempts: 0,
+      expiresAt: Date.now() + 60_000,
+    }),
+  );
+  await registerTestRoute(fastify, routeDependencies);
+
+  try {
+    const response = await fastify.inject({
+      method: "GET",
+      url: `/mfa-challenge-totp?tx=${transactionId}`,
+    });
+
+    assert.equal(response.statusCode, 401);
+    assert.match(response.body, /not waiting for MFA/);
+  } finally {
+    await fastify.close();
+  }
+});
+
 test("MFA challenge route rejects an expired transaction", async () => {
   const fastify = Fastify();
   await fastify.register(formbody);
@@ -286,13 +320,14 @@ test("MFA challenge route allows only one concurrent request to complete a trans
 
 function setupRoute(expiresAt = Date.now() + 60_000) {
   const pendingAuthorizationStore = createPendingAuthorizationStore();
-  pendingAuthorizationStore.savePendingAuthorization(transactionId, {
+  transactionId = pendingAuthorizationStore.newPendingAuthorization({
     authorizationRequest: {
       clientId: "client-id-opaque",
       redirectUri: "http://localhost:3000/callback",
       responseType: "code",
     },
-    subject: testUserId,
+    stage: "mfa",
+    userId: testUserId,
     amr: ["pwd"],
     mfaFailedAttempts: 0,
     expiresAt,
