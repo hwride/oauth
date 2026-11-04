@@ -131,7 +131,7 @@ test("POST authorization endpoint redirects to TOTP MFA challenge for users with
     codeChallengeMethod: "S256",
     resource: ordersApiResource,
   });
-  assert.equal(pendingAuthorization.subject, testUserId);
+  assert.equal(pendingAuthorization.userId, testUserId);
   assert.deepEqual(pendingAuthorization.amr, ["pwd"]);
   assert.ok(pendingAuthorization.expiresAt > Date.now());
   assert.ok(pendingAuthorization.expiresAt <= Date.now() + 2_000);
@@ -518,7 +518,6 @@ test("GET authorization endpoint sign up link preserves nonce parameter", async 
   assert.equal(response.status, 200);
 
   const html = await response.text();
-  assert.match(html, /name="nonce" value="nonce-value-123"/);
   assert.match(
     html,
     /href="\/signup\?client_id=client-id-opaque&amp;response_type=code&amp;redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback&amp;scope=openid\+profile&amp;nonce=nonce-value-123"/,
@@ -745,13 +744,20 @@ async function submitAuthorizationLogin(
   try {
     const authorizationPath = new URL(serverConfig.authorizationEndpoint)
       .pathname;
+    const loginPage = await fetch(
+      `${address}${authorizationPath}?${new URLSearchParams(formData)}`,
+      { redirect: "manual" },
+    );
+    if (loginPage.status !== 200) return loginPage;
+    const action = (await loginPage.text()).match(
+      /<form method="post" action="([^"]+)"/,
+    )[1];
     const requestBody = new URLSearchParams({
-      ...formData,
       username: credentials.username,
       password: credentials.password,
     }).toString();
 
-    return await fetch(`${address}${authorizationPath}`, {
+    return await fetch(address + action, {
       headers: {
         "content-type": "application/x-www-form-urlencoded",
       },

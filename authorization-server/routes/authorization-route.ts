@@ -15,6 +15,7 @@ import type {
   AuthorizationRequestError,
 } from "../types/authorization-request.ts";
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
+import { isUuidV4 } from "../utils/uuid.ts";
 import { getAllowedScopesForUser } from "../utils/rbac-utils.ts";
 
 type AuthorizeQueryParams = {
@@ -45,6 +46,9 @@ export function registerAuthorizationRoute(
   fastify.get<{
     Querystring: AuthorizeQueryParams;
   }>(authorizationEndpointPath, async function (request, reply) {
+    // Make sure we don't leak tx ID query param.
+    reply.header("cache-control", "no-store");
+    reply.header("referrer-policy", "no-referrer");
     const validationResult = validateAuthorizationRequest(request.query);
     if (validationResult.ok === false) {
       return reply
@@ -52,30 +56,59 @@ export function registerAuthorizationRoute(
         .send(validationResult.authorizationError.error);
     }
 
+    const transactionId = pendingAuthorizationStore.newPendingAuthorization({
+      stage: "login",
+      authorizationRequest: validationResult.authorizationRequest,
+      amr: [],
+      mfaFailedAttempts: 0,
+      expiresAt: Date.now() + serverConfig.mfaTransactionLifetimeSeconds * 1000,
+    });
+
     return reply
       .type("text/html; charset=utf-8")
       .send(
         renderLoginPage(
           authorizationEndpointPath,
           validationResult.authorizationRequest,
+          transactionId,
         ),
       );
   });
 
   // Endpoint to submit login form to if login is required.
   fastify.post<{
-    Body: AuthorizeQueryParams & {
+    Querystring: { tx?: string };
+    Body: {
       username?: string;
       password?: string;
     };
   }>(authorizationEndpointPath, async function (request, reply) {
-    const validationResult = validateAuthorizationRequest(request.body);
-    if (validationResult.ok === false) {
-      return reply
-        .code(validationResult.authorizationError.statusCode)
-        .send(validationResult.authorizationError.error);
+    // Make sure we don't leak tx ID query param.
+    reply.header("cache-control", "no-store");
+    reply.header("referrer-policy", "no-referrer");
+    const { tx } = request.query;
+    if (!isUuidV4(tx)) {
+      return reply.code(400).send({
+        error: "invalid_request",
+        error_description: "Login transaction ID not valid",
+      });
     }
-    const { authorizationRequest, clientConfig } = validationResult;
+
+    const pending = pendingAuthorizationStore.loadPendingAuthorization(tx);
+    if (pending == null) {
+      return reply.code(400).send({
+        error: "invalid_request",
+        error_description: "Login transaction not found or expired",
+      });
+    }
+
+    if (pending.stage !== "login") {
+      return reply.code(400).send({
+        error: "invalid_request",
+        error_description: "Login transaction is not waiting for login",
+      });
+    }
+    const { authorizationRequest } = pending;
 
     const user = authenticateUser(
       userStore,
@@ -90,6 +123,7 @@ export function registerAuthorizationRoute(
           renderLoginPage(
             authorizationEndpointPath,
             authorizationRequest,
+            tx,
             "Invalid username or password",
           ),
         );
@@ -101,19 +135,35 @@ export function registerAuthorizationRoute(
         (registration) => registration.type === "TOTP",
       )
     ) {
-      // Save the pending authorization request in our store against a transaction ID.
-      // Then when an MFA challenge is made, we can ensure it must match the correct transaction.
-      const transactionId = randomUUID();
-      pendingAuthorizationStore.savePendingAuthorization(transactionId, {
-        authorizationRequest,
-        subject: user.userId,
-        // Password authentication, represented by RFC 8176's "pwd" AMR value.
-        amr: ["pwd"],
-        mfaFailedAttempts: 0,
-        expiresAt:
-          Date.now() + serverConfig.mfaTransactionLifetimeSeconds * 1000,
+      const updateResult = pendingAuthorizationStore.updatePendingAuthorization(
+        tx,
+        "login",
+        (record) => ({
+          ...record,
+          stage: "mfa",
+          userId: user.userId,
+          // Password authentication, represented by RFC 8176's "pwd" AMR value.
+          amr: ["pwd"],
+          mfaFailedAttempts: 0,
+          expiresAt:
+            Date.now() + serverConfig.mfaTransactionLifetimeSeconds * 1000,
+        }),
+      );
+      if (updateResult !== "updated") {
+        return reply.code(400).send({
+          error: "invalid_request",
+          error_description: "Login transaction not found or expired",
+        });
+      }
+      return reply.redirect(`/mfa-challenge-totp?tx=${tx}`);
+    }
+
+    // Consume the transaction once authorization is complete.
+    if (!pendingAuthorizationStore.deletePendingAuthorization(tx)) {
+      return reply.code(400).send({
+        error: "invalid_request",
+        error_description: "Login transaction not found or expired",
       });
-      return reply.redirect(`/mfa-challenge-totp?tx=${transactionId}`);
     }
 
     return reply.redirect(
@@ -266,6 +316,7 @@ function validateAuthorizationRequest(
 function renderLoginPage(
   authorizationEndpointPath: string,
   authorizationRequest: AuthorizationRequest,
+  transactionId: string,
   errorMessage?: string,
 ) {
   const escapedErrorMessage = errorMessage
@@ -291,6 +342,9 @@ function renderLoginPage(
   setIfExists("codeChallengeMethod", "code_challenge_method");
   setIfExists("resource", "resource");
   const signupPath = `/signup?${signupPathSearchParams.toString()}`;
+  const loginActionUrl = new URL(authorizationEndpointPath, "http://localhost");
+  loginActionUrl.searchParams.set("tx", transactionId);
+  const loginAction = loginActionUrl.pathname + loginActionUrl.search;
 
   return `<!doctype html>
 <html lang="en">
@@ -302,16 +356,7 @@ function renderLoginPage(
     <h1>Login</h1>
     <p>Sign in to continue for client ${escapeHtml(authorizationRequest.clientId)}.</p>
     ${escapedErrorMessage}
-    <form method="post" action="${escapeHtml(authorizationEndpointPath)}">
-      <input type="hidden" name="client_id" value="${escapeHtml(authorizationRequest.clientId)}">
-      <input type="hidden" name="response_type" value="${escapeHtml(authorizationRequest.responseType)}">
-      <input type="hidden" name="redirect_uri" value="${escapeHtml(authorizationRequest.redirectUri)}">
-      <input type="hidden" name="scope" value="${escapeHtml(authorizationRequest.scope ?? "")}">
-      <input type="hidden" name="nonce" value="${escapeHtml(authorizationRequest.nonce ?? "")}">
-      <input type="hidden" name="state" value="${escapeHtml(authorizationRequest.state ?? "")}">
-      <input type="hidden" name="code_challenge" value="${escapeHtml(authorizationRequest.codeChallenge ?? "")}">
-      <input type="hidden" name="code_challenge_method" value="${escapeHtml(authorizationRequest.codeChallengeMethod ?? "")}">
-      <input type="hidden" name="resource" value="${escapeHtml(authorizationRequest.resource ?? "")}">
+    <form method="post" action="${escapeHtml(loginAction)}">
       <label>
         Username
         <input type="text" name="username" autocomplete="username" required>

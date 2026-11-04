@@ -760,12 +760,14 @@ async function authorizeClient(
   assert.equal(loginPageResponse.status, 200);
 
   // Submit the login form.
+  const action = (await loginPageResponse.text()).match(
+    /<form method="post" action="([^"]+)"/,
+  )[1];
   const loginRequestBody = new URLSearchParams({
-    ...requestParams,
     username: credentials.username,
     password: credentials.password,
   }).toString();
-  return await fetch(`${address}${authorizationPath}`, {
+  return await fetch(address + action, {
     headers: {
       "content-type": "application/x-www-form-urlencoded",
     },
