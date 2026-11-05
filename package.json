@@ -4,12 +4,12 @@
   "type": "module",
   "version": "1.0.0",
   "scripts": {
-    "conformance:up": "docker compose -f conformance/compose.yml up",
-    "conformance:down": "docker compose -f conformance/compose.yml down",
     "dev": "node scripts/dev.ts",
     "test": "node --test otp/*.test.ts util/*.test.ts",
     "types": "tsc --noEmit",
-    "prettier:write": "prettier --write ."
+    "prettier:write": "prettier --write .",
+    "conformance:up": "docker compose -f conformance/docker-compose-prebuilt.yml -f conformance/proxy-compose.yml up --build",
+    "conformance:down": "docker compose -f conformance/docker-compose-prebuilt.yml -f conformance/proxy-compose.yml down"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

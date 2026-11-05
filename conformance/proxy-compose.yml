@@ -1,0 +1,6 @@
+services:
+  nginx-auth-server:
+    build:
+      context: ./nginx-auth-server
+    ports:
+      - "4443:4443"
