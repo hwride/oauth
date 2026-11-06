@@ -18,7 +18,7 @@ async function main() {
   process.env.CLIENT_JWT_BASE ??= "http://localhost:3000";
   process.env.CLIENT_OPAQUE_BASE ??= "http://localhost:3001";
   process.env.AUTH_SERVER_PORT = String(authorizationServerPort);
-  process.env.ISSUER = authServerBase;
+  process.env.ISSUER ??= authServerBase;
 
   // Resource server and client
   process.env.AUTH_SERVER_BASE = authServerBase;

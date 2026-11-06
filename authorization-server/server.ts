@@ -24,6 +24,7 @@ export async function main() {
   try {
     await fastify.listen({
       port: getAuthorizationServerPort(),
+      host: process.env.AUTH_SERVER_HOST ?? "localhost",
     });
     fastify.log.info("Authorization server is booted");
     return fastify;
