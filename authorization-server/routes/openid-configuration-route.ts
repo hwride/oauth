@@ -15,6 +15,7 @@ export function registerOpenIdConfigurationRoute(
       authorization_endpoint: serverConfig.authorizationEndpoint,
       token_endpoint: serverConfig.tokenEndpoint,
       jwks_uri: serverConfig.jwksUri,
+      userinfo_endpoint: serverConfig.userInfoUri,
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code"],
       code_challenge_methods_supported: ["S256", "plain"],

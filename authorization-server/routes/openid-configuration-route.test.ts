@@ -17,6 +17,7 @@ test("GET /.well-known/openid-configuration defaults endpoints from the issuer",
     authorization_endpoint: "https://issuer.example.test/authorize",
     token_endpoint: "https://issuer.example.test/token",
     jwks_uri: "https://issuer.example.test/.well-known/jwks.json",
+    userinfo_endpoint: "https://issuer.example.test/userinfo",
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code"],
     code_challenge_methods_supported: ["S256", "plain"],
@@ -44,6 +45,7 @@ test("GET /.well-known/openid-configuration uses endpoint overrides when provide
       authorizationEndpoint: "https://login.example.test/oauth2/authorize",
       tokenEndpoint: "https://tokens.example.test/oauth2/token",
       jwksUri: "https://keys.example.test/oauth2/jwks.json",
+      userInfoUri: "https://issuer.example.test/userinfo",
     }),
   );
 
@@ -53,6 +55,7 @@ test("GET /.well-known/openid-configuration uses endpoint overrides when provide
     authorization_endpoint: "https://login.example.test/oauth2/authorize",
     token_endpoint: "https://tokens.example.test/oauth2/token",
     jwks_uri: "https://keys.example.test/oauth2/jwks.json",
+    userinfo_endpoint: "https://issuer.example.test/userinfo",
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code"],
     code_challenge_methods_supported: ["S256", "plain"],
