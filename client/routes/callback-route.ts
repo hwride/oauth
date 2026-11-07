@@ -406,7 +406,7 @@ async function verifyIdToken(
   if (protectedHeader.alg !== "RS256") {
     return {
       ok: false,
-      errorMessage: "ID token does use default RS256 for alg",
+      errorMessage: "ID token does not use default RS256 for alg",
     };
   }
   // 3.1.3.7. ID Token Validation - 8 - Verify alg if it is a MAC based algorithm (e.g. HS256, HS384, HS512)
