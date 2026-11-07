@@ -18,6 +18,7 @@ export function registerOpenIdConfigurationRoute(
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code"],
       code_challenge_methods_supported: ["S256", "plain"],
+      subject_types_supported: ["public"],
     });
   });
 }
