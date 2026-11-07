@@ -23,6 +23,7 @@ test("GET /.well-known/openid-configuration defaults endpoints from the issuer",
     code_challenge_methods_supported: ["S256", "plain"],
     subject_types_supported: ["public"],
     id_token_signing_alg_values_supported: ["RS256"],
+    userinfo_signing_alg_values_supported: ["none"],
     claims_supported: [
       "iss",
       "aud",
@@ -62,6 +63,7 @@ test("GET /.well-known/openid-configuration uses endpoint overrides when provide
     code_challenge_methods_supported: ["S256", "plain"],
     subject_types_supported: ["public"],
     id_token_signing_alg_values_supported: ["RS256"],
+    userinfo_signing_alg_values_supported: ["none"],
     claims_supported: [
       "iss",
       "aud",

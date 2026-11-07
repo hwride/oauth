@@ -21,6 +21,7 @@ export function registerOpenIdConfigurationRoute(
       code_challenge_methods_supported: ["S256", "plain"],
       subject_types_supported: ["public"],
       id_token_signing_alg_values_supported: [serverConfig.jwtSigningAlg],
+      userinfo_signing_alg_values_supported: ["none"], // We currently only return plain JSON from /userinfo
       claims_supported: [
         // Shared
         "iss",
