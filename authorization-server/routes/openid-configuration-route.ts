@@ -20,6 +20,22 @@ export function registerOpenIdConfigurationRoute(
       code_challenge_methods_supported: ["S256", "plain"],
       subject_types_supported: ["public"],
       id_token_signing_alg_values_supported: [serverConfig.jwtSigningAlg],
+      claims_supported: [
+        // Shared
+        "iss",
+        "aud",
+        "sub", // Included on ID token and /userinfo endpoint
+        "name", // Included on ID token and /userinfo endpoint
+        "iat",
+        "exp",
+        "jti",
+        // ID token only
+        "amr",
+        "nonce",
+        // JWT access token only
+        "client_id",
+        "scope",
+      ],
     });
   });
 }
