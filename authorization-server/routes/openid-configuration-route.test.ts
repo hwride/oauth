@@ -38,6 +38,7 @@ test("GET /.well-known/openid-configuration defaults endpoints from the issuer",
       "scope",
     ],
     claims_parameter_supported: false,
+    request_parameter_supported: false,
     scopes_supported: ["openid", "profile", "offline_access"],
   });
 });
@@ -79,6 +80,7 @@ test("GET /.well-known/openid-configuration uses endpoint overrides when provide
       "scope",
     ],
     claims_parameter_supported: false,
+    request_parameter_supported: false,
     scopes_supported: ["openid", "profile", "offline_access"],
   });
 });

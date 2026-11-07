@@ -39,6 +39,7 @@ export function registerOpenIdConfigurationRoute(
         "scope",
       ],
       claims_parameter_supported: false,
+      request_parameter_supported: false,
       // Note at the moment we only advertise the OpenID Connect scopes, not any of our custom ones like orders:read.
       scopes_supported: ["openid", "profile", "offline_access"],
     });
