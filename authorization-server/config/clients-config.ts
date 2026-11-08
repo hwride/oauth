@@ -30,6 +30,8 @@ const accessTokenLifetimeSeconds = 60 * 60;
 const idTokenLifetimeSeconds = 60 * 60;
 const refreshTokenLifetimeSeconds = 60 * 60 * 24 * 2;
 const defaultClientBase = `http://localhost:${process.env.CLIENT_PORT ?? 3000}`;
+const conformanceRedirectUri =
+  "https://localhost.emobix.co.uk:8443/test/a/oauth-local/callback";
 
 export const clientsConfig: ClientConfig[] = [
   {
@@ -71,6 +73,26 @@ export const clientsConfig: ClientConfig[] = [
         process.env.CLIENT_PUBLIC_BASE ?? defaultClientBase,
       ).toString(),
     ],
+    accessTokenType: "jwt",
+    accessTokenLifetimeSeconds,
+    idTokenLifetimeSeconds,
+    refreshTokenLifetimeSeconds,
+  },
+  {
+    clientId: "conformance-client-1",
+    clientAuthMethod: "client_secret_basic",
+    clientSecret: "conformance-secret-1",
+    redirectUris: [conformanceRedirectUri],
+    accessTokenType: "jwt",
+    accessTokenLifetimeSeconds,
+    idTokenLifetimeSeconds,
+    refreshTokenLifetimeSeconds,
+  },
+  {
+    clientId: "conformance-client-2",
+    clientAuthMethod: "client_secret_basic",
+    clientSecret: "conformance-secret-2",
+    redirectUris: [conformanceRedirectUri],
     accessTokenType: "jwt",
     accessTokenLifetimeSeconds,
     idTokenLifetimeSeconds,
