@@ -17,7 +17,7 @@ export function registerOpenIdConfigurationRoute(
       jwks_uri: serverConfig.jwksUri,
       userinfo_endpoint: serverConfig.userInfoUri,
       response_types_supported: ["code"],
-      grant_types_supported: ["authorization_code"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
       code_challenge_methods_supported: ["S256", "plain"],
       subject_types_supported: ["public"],
       id_token_signing_alg_values_supported: [serverConfig.jwtSigningAlg],
