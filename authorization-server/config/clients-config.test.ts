@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 let configVersion = 0;
+const conformanceRedirectUri =
+  "https://localhost.emobix.co.uk:8443/test/a/oauth-local/callback";
 
 async function getRedirectUris(overrides: NodeJS.ProcessEnv = {}) {
   const names = [
@@ -36,14 +38,18 @@ test("callback URIs default to client port 3000", async () => {
     ["http://localhost:3000/callback"],
     ["http://localhost:3000/callback"],
     ["http://localhost:3000/callback"],
+    [conformanceRedirectUri],
+    [conformanceRedirectUri],
   ]);
 });
 
-test("callback URIs follow a custom CLIENT_PORT for every client", async () => {
+test("local app callback URIs follow a custom CLIENT_PORT", async () => {
   assert.deepEqual(await getRedirectUris({ CLIENT_PORT: "3100" }), [
     ["http://localhost:3100/callback"],
     ["http://localhost:3100/callback"],
     ["http://localhost:3100/callback"],
+    [conformanceRedirectUri],
+    [conformanceRedirectUri],
   ]);
 });
 
@@ -59,6 +65,8 @@ test("explicit client bases take precedence over CLIENT_PORT", async () => {
       ["https://opaque.example.test:3101/callback"],
       ["https://jwt.example.test:3102/callback"],
       ["https://public.example.test:3103/callback"],
+      [conformanceRedirectUri],
+      [conformanceRedirectUri],
     ],
   );
 });

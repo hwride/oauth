@@ -4,12 +4,7 @@
 
 1. Start Docker Desktop. From the repository root, run these in two terminals:
 1. Boot the conformance suite and our auth server HTTPS proxy: `npm run conformance:up`.
-1. Boot the server with the HTTPS issuer used by the proxy:
-   ```shell
-   export ISSUER="https://host.docker.internal:4443"
-   export AUTH_SERVER_HOST="0.0.0.0" # This is not always necessary.
-   npm run dev:conformance
-   ```
+1. Boot the server with `npm run dev:conformance`. This loads the HTTPS issuer and listen address from `conformance.env`.
 1. The conformance suite should then be available at <https://localhost.emobix.co.uk:8443>.
 
 > [!NOTE]  
@@ -17,11 +12,32 @@
 
 ## Create a test plan
 1. Go to <https://localhost.emobix.co.uk:8443>
-2. Click "Create a new test"
-3. Click OpenID Connect Core > Config
-4. For discovery URL put `https://host.docker.internal:4443/.well-known/openid-configuration`.
+1. Click "Create a new test"
+1. Select a test plan.
+1. Configure the test plan. See the sections below.
+1. Click "Run Test".
+
+### Configuring test plans
+#### OpenID Connect Core > Config
+1. `server.discoveryUrl`: `https://host.docker.internal:4443/.well-known/openid-configuration`.
    The proxy uses a local self-signed certificate, so accept the certificate warning when opening the URL in a browser.
-5. Click "Run Test".
+
+#### OpenID Connect Core > Basic
+
+1. Test information
+   1. `alias`: `oauth-local`. The alias keeps the callback URI consistent across runs at `https://localhost.emobix.co.uk:8443/test/a/oauth-local/callback`.
+1. Server
+   1. `discoveryUrl`: <https://host.docker.internal:4443/.well-known/openid-configuration>
+1. Client
+   1. `client.client_id`: `conformance-client-1`
+   1. `client.client_secret`: `conformance-secret-1`
+1. Second client
+   1. `client.client_id`: `conformance-client-2`
+   1. `client.client_secret`: `conformance-secret-2`
+
+Both clients use `client_secret_basic`.
+
+See the [official OpenID Provider testing instructions](https://openid.net/certification/connect_op_testing/) for the full client setup information.
 
 ## Shutdown
 1. Run `npm run conformance:down`
