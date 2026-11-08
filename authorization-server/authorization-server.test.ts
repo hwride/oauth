@@ -137,7 +137,7 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
     };
     const verifiedIdToken = await jwtVerify(
       tokenResponseBody.id_token,
-      defaultServerConfig.publicKey,
+      defaultServerConfig.signingKey.publicKey,
       {
         algorithms: ["RS256"],
         issuer: defaultServerConfig.issuer,

@@ -3,8 +3,7 @@ import type { GenerateKeyPairResult } from "jose/key/generate/keypair";
 
 export type ServerConfig = {
   jwtSigningAlg: "RS256";
-  publicKey: GenerateKeyPairResult["publicKey"];
-  privateKey: GenerateKeyPairResult["privateKey"];
+  signingKey: KeyConfig;
   issuer: string;
   authorizationEndpoint: string;
   tokenEndpoint: string;
@@ -13,6 +12,12 @@ export type ServerConfig = {
   mfaTransactionLifetimeSeconds: number;
   mfaMaxAttempts: number;
   authorizationCodeLifetimeSeconds: number;
+};
+
+export type KeyConfig = {
+  kid: string;
+  publicKey: GenerateKeyPairResult["publicKey"];
+  privateKey: GenerateKeyPairResult["privateKey"];
 };
 
 export async function getServerConfig(): Promise<ServerConfig> {
@@ -27,8 +32,11 @@ export async function getServerConfig(): Promise<ServerConfig> {
 
   return {
     jwtSigningAlg,
-    publicKey,
-    privateKey,
+    signingKey: {
+      kid: "1",
+      publicKey,
+      privateKey,
+    },
     issuer,
     authorizationEndpoint:
       process.env.AUTHORIZATION_ENDPOINT ?? `${issuer}/authorize`,

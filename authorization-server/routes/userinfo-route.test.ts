@@ -168,14 +168,14 @@ async function fetchUserinfo(
 
 async function signAccessToken({
   serverConfig = defaultServerConfig,
-  privateKey = serverConfig.privateKey,
+  privateKey = serverConfig.signingKey.privateKey,
   subject = testUserId,
   includeSubject = true,
   scope,
   tokenType = "at+jwt",
 }: {
   serverConfig?: ServerConfig;
-  privateKey?: ServerConfig["privateKey"];
+  privateKey?: ServerConfig["signingKey"]["privateKey"];
   subject?: string;
   includeSubject?: boolean;
   scope?: string;

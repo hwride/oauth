@@ -23,6 +23,7 @@ test("GET /.well-known/jwks.json returns the signing JWK", async function () {
       keys: Array<Record<string, string>>;
     };
     assert.equal(body.keys.length, 1);
+    assert.equal(body.keys[0].kid, "1");
     assert.equal(body.keys[0].alg, "RS256");
     assert.equal(body.keys[0].use, "sig");
     assert.equal(body.keys[0].kty, "RSA");

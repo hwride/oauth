@@ -439,7 +439,7 @@ test("POST token endpoint returns a signed jwt for jwt access token type", async
 
   const verified = await jwtVerify(
     tokenResponse.access_token,
-    defaultServerConfig.publicKey,
+    defaultServerConfig.signingKey.publicKey,
     {
       algorithms: ["RS256"],
       issuer: defaultServerConfig.issuer,
@@ -494,7 +494,7 @@ test("POST token endpoint includes scope in response and access token when prese
   assert.equal(tokenResponse.scope, "openid profile");
   const verified = await jwtVerify(
     tokenResponse.access_token,
-    defaultServerConfig.publicKey,
+    defaultServerConfig.signingKey.publicKey,
     {
       algorithms: ["RS256"],
       issuer: defaultServerConfig.issuer,
@@ -532,7 +532,7 @@ test("POST token endpoint sets aud to orders API resource when resource indicato
 
   const verified = await jwtVerify(
     tokenResponse.access_token,
-    defaultServerConfig.publicKey,
+    defaultServerConfig.signingKey.publicKey,
     {
       algorithms: ["RS256"],
       issuer: defaultServerConfig.issuer,
@@ -569,7 +569,7 @@ test("POST token endpoint sets aud to issuer then orders API resource when openi
 
   const verified = await jwtVerify(
     tokenResponse.access_token,
-    defaultServerConfig.publicKey,
+    defaultServerConfig.signingKey.publicKey,
     {
       algorithms: ["RS256"],
       issuer: defaultServerConfig.issuer,
@@ -615,7 +615,7 @@ test("POST token endpoint returns an ID token when scope includes openid token",
 
   const verified = await jwtVerify(
     tokenResponse.id_token,
-    defaultServerConfig.publicKey,
+    defaultServerConfig.signingKey.publicKey,
     {
       algorithms: ["RS256"],
       issuer: defaultServerConfig.issuer,
@@ -673,7 +673,7 @@ test("POST token endpoint includes name in ID token when scope includes profile"
 
   const verified = await jwtVerify(
     tokenResponse.id_token,
-    defaultServerConfig.publicKey,
+    defaultServerConfig.signingKey.publicKey,
     {
       algorithms: ["RS256"],
       issuer: defaultServerConfig.issuer,
@@ -710,7 +710,7 @@ test("POST token endpoint includes nonce in ID token when present on auth code",
 
   const verifiedIdToken = await jwtVerify(
     tokenResponse.id_token,
-    defaultServerConfig.publicKey,
+    defaultServerConfig.signingKey.publicKey,
     {
       algorithms: ["RS256"],
       issuer: defaultServerConfig.issuer,
@@ -972,7 +972,7 @@ test("POST token endpoint keeps resource audience when issuing an access token f
 
   const verified = await jwtVerify(
     tokenResponse.access_token,
-    defaultServerConfig.publicKey,
+    defaultServerConfig.signingKey.publicKey,
     {
       algorithms: ["RS256"],
       issuer: defaultServerConfig.issuer,
@@ -1013,7 +1013,7 @@ test("POST token endpoint keeps openid issuer and resource audiences when issuin
 
   const verified = await jwtVerify(
     tokenResponse.access_token,
-    defaultServerConfig.publicKey,
+    defaultServerConfig.signingKey.publicKey,
     {
       algorithms: ["RS256"],
       issuer: defaultServerConfig.issuer,
