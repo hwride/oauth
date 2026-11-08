@@ -78,6 +78,7 @@ export const clientsConfig: ClientConfig[] = [
     idTokenLifetimeSeconds,
     refreshTokenLifetimeSeconds,
   },
+  // OpenID Conformance Tests clients
   {
     clientId: "conformance-client-1",
     clientAuthMethod: "client_secret_basic",

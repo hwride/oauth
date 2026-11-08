@@ -7,8 +7,11 @@ const testSigningKeys = await generateKeyPair(jwtSigningAlg);
 
 const defaultServerConfig: ServerConfig = {
   jwtSigningAlg,
-  publicKey: testSigningKeys.publicKey,
-  privateKey: testSigningKeys.privateKey,
+  signingKey: {
+    kid: "1",
+    publicKey: testSigningKeys.publicKey,
+    privateKey: testSigningKeys.privateKey,
+  },
   issuer: "https://issuer.example.test",
   authorizationEndpoint: "https://issuer.example.test/authorize",
   tokenEndpoint: "https://issuer.example.test/token",

@@ -9,13 +9,16 @@ export function registerJwksRoute(
   // JSON Web Key (JWK) Set, RFC 7517, Section 5:
   // https://www.rfc-editor.org/rfc/rfc7517.html#section-5
   fastify.get("/.well-known/jwks.json", async function (_, reply) {
-    const publicJwk = await exportJWK(serverConfig.publicKey);
+    const publicJwk = await exportJWK(serverConfig.signingKey.publicKey);
 
     return reply.send({
       keys: [
         {
           ...publicJwk,
+          // https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.10.1
+          kid: serverConfig.signingKey.kid,
           alg: serverConfig.jwtSigningAlg,
+          // Intended use of the public key, signature or encryption.
           use: "sig",
         },
       ],

@@ -17,6 +17,9 @@
 1. Configure the test plan. See the sections below.
 1. Click "Run Test".
 
+### Users
+Login with `jane`/`password` if you don't want MFA.
+
 ### Configuring test plans
 #### OpenID Connect Core > Config
 1. `server.discoveryUrl`: `https://host.docker.internal:4443/.well-known/openid-configuration`.

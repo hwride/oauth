@@ -479,7 +479,7 @@ async function generateAccessToken({
       .setProtectedHeader({ alg: serverConfig.jwtSigningAlg, typ: "at+jwt" })
       .setIssuedAt(nowSeconds)
       .setExpirationTime(nowSeconds + clientConfig.accessTokenLifetimeSeconds)
-      .sign(serverConfig.privateKey);
+      .sign(serverConfig.signingKey.privateKey);
   }
 }
 
@@ -531,7 +531,7 @@ async function generateIdToken({
     .setProtectedHeader({ alg: serverConfig.jwtSigningAlg })
     .setIssuedAt(nowSeconds)
     .setExpirationTime(nowSeconds + clientConfig.idTokenLifetimeSeconds)
-    .sign(serverConfig.privateKey);
+    .sign(serverConfig.signingKey.privateKey);
 }
 
 function getAccessTokenAudience(

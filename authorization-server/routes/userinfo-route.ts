@@ -34,13 +34,17 @@ async function handleUserinfoRequest(
   }
 
   try {
-    const { payload } = await jwtVerify(token, serverConfig.publicKey, {
-      algorithms: [serverConfig.jwtSigningAlg],
-      audience: serverConfig.issuer,
-      issuer: serverConfig.issuer,
-      requiredClaims: ["sub", "exp"],
-      typ: "at+jwt",
-    });
+    const { payload } = await jwtVerify(
+      token,
+      serverConfig.signingKey.publicKey,
+      {
+        algorithms: [serverConfig.jwtSigningAlg],
+        audience: serverConfig.issuer,
+        issuer: serverConfig.issuer,
+        requiredClaims: ["sub", "exp"],
+        typ: "at+jwt",
+      },
+    );
 
     if (typeof payload.sub !== "string" || payload.sub.length === 0) {
       return sendInvalidTokenResponse(reply);
