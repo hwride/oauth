@@ -1,5 +1,6 @@
 import type { ServerContext } from "../server-context.ts";
 import type { FastifyInstance } from "fastify";
+import { escapeHtml } from "../utils/html-utils.ts";
 
 type SignupPageQueryParams = {
   client_id?: string;
@@ -199,11 +200,3 @@ function createLinkWithParams(path: string, params: SignupPageQueryParams) {
   return url.pathname + url.search;
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}

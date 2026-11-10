@@ -17,6 +17,7 @@ import type {
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
 import { getAllowedScopesForUser } from "../utils/rbac-utils.ts";
+import { escapeHtml } from "../utils/html-utils.ts";
 import {
   getSessionCookie,
   getSessionCookieClear,
@@ -528,11 +529,3 @@ function createInvalidTargetError(): AuthorizationRequestError {
   };
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
