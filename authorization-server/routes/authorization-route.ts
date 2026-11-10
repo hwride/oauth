@@ -1,14 +1,10 @@
 import type { ServerContext } from "../server-context.ts";
-import { randomUUID } from "node:crypto";
-import type { FastifyInstance, FastifyReply } from "fastify";
-import { clientsConfig, type ClientConfig } from "../config/clients-config.ts";
+import type { FastifyInstance } from "fastify";
+import { type ClientConfig, clientsConfig } from "../config/clients-config.ts";
 import {
-  getResourceConfig,
   isSupportedResource,
   type SupportedResource,
 } from "../config/resources-config.ts";
-import type { ServerConfig } from "../config/server-config.ts";
-import type { AuthorizationCodeStore } from "../stores/authorization-code-store.ts";
 import type { UserRecord, UserStore } from "../stores/user-store.ts";
 import type {
   AuthorizationRequest,
@@ -16,13 +12,12 @@ import type {
 } from "../types/authorization-request.ts";
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
-import { getAllowedScopesForUser } from "../utils/rbac-utils.ts";
 import { escapeHtml } from "../utils/html-utils.ts";
+import { createAuthorizationRedirectUrl } from "../utils/authorization-route-utils.ts";
 import {
   getSessionCookie,
   getSessionCookieClear,
   loadSessionFromCookie,
-  sessionCookieName,
 } from "../utils/session-utils.ts";
 
 type AuthorizeQueryParams = {
@@ -229,15 +224,6 @@ type AuthorizationRequestValidationResult =
       authorizationError: AuthorizationRequestError;
     };
 
-const unrestrictedScopes = new Set([
-  "openid",
-  "profile",
-  "email",
-  "address",
-  "phone",
-  "offline_access",
-]);
-
 function validateAuthorizationRequest(
   input: AuthorizeQueryParams,
 ): AuthorizationRequestValidationResult {
@@ -427,98 +413,6 @@ function authenticateUser(
   return user;
 }
 
-export function createAuthorizationRedirectUrl(
-  serverConfig: ServerConfig,
-  authorizationCodeStore: AuthorizationCodeStore,
-  authorizationRequest: AuthorizationRequest,
-  user: UserRecord,
-  amr: AuthenticationMethodReference[],
-) {
-  const code = randomUUID();
-  authorizationCodeStore.saveAuthorizationCode(code, {
-    clientId: authorizationRequest.clientId,
-    subject: user.userId,
-    amr,
-    redirectUri: authorizationRequest.redirectUri,
-    scope: filterAllowedScopes(
-      authorizationRequest.scope,
-      user,
-      authorizationRequest.resource,
-    ),
-    nonce: authorizationRequest.nonce,
-    resource: authorizationRequest.resource,
-    expiresAt:
-      Date.now() + serverConfig.authorizationCodeLifetimeSeconds * 1000,
-    codeChallenge: authorizationRequest.codeChallenge,
-    codeChallengeMethod: authorizationRequest.codeChallengeMethod,
-  });
-
-  const redirectUrl = new URL(authorizationRequest.redirectUri);
-  redirectUrl.searchParams.set("code", code);
-  if (authorizationRequest.state) {
-    redirectUrl.searchParams.set("state", authorizationRequest.state);
-  }
-  return redirectUrl.toString();
-}
-
-function filterAllowedScopes(
-  requestedScope: string | undefined,
-  user: UserRecord,
-  requestedResource: SupportedResource | undefined,
-): string | undefined {
-  const filteredUserScopes = filterAllowedUserScopes(requestedScope, user);
-  return filterAllowedResourceScopes(filteredUserScopes, requestedResource);
-}
-
-/**
- * Filter scopes according to what is allowed for a user.
- *
- * Takes into account user roles and allowed scopes.
- */
-function filterAllowedUserScopes(
-  requestedScope: string | undefined,
-  user: UserRecord,
-): string | undefined {
-  if (!requestedScope) {
-    return requestedScope;
-  }
-
-  const requestedScopes = requestedScope
-    .split(/\s+/)
-    .filter((scope) => scope.length > 0);
-
-  const allowedScopes = new Set<string>(getAllowedScopesForUser(user));
-  const filteredScopes = requestedScopes.filter((scope) => {
-    return unrestrictedScopes.has(scope) || allowedScopes.has(scope);
-  });
-
-  return filteredScopes.length > 0 ? filteredScopes.join(" ") : undefined;
-}
-
-/**
- * Filter scopes according to what is allowed for a resource.
- */
-function filterAllowedResourceScopes(
-  requestedScope: string | undefined,
-  requestedResource: SupportedResource | undefined,
-): string | undefined {
-  if (!requestedScope || !requestedResource) {
-    return requestedScope;
-  }
-
-  const resourceConfig = getResourceConfig(requestedResource);
-  const allowedScopes = new Set<string>(resourceConfig.allowedScopes);
-  const requestedScopes = requestedScope
-    .split(/\s+/)
-    .filter((scope) => scope.length > 0);
-
-  const filteredScopes = requestedScopes.filter((scope) => {
-    return unrestrictedScopes.has(scope) || allowedScopes.has(scope);
-  });
-
-  return filteredScopes.length > 0 ? filteredScopes.join(" ") : undefined;
-}
-
 function createInvalidTargetError(): AuthorizationRequestError {
   return {
     statusCode: 400,
@@ -528,4 +422,3 @@ function createInvalidTargetError(): AuthorizationRequestError {
     },
   };
 }
-
