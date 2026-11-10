@@ -154,6 +154,87 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
   }
 });
 
+test("authorization server reuses a session without requiring credentials", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
+    authorizationCodeStore,
+  });
+  const address = await fastify.listen({
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  const authorizationPath = new URL(defaultServerConfig.authorizationEndpoint)
+    .pathname;
+  const authorizationUrl = `${address}${authorizationPath}?${new URLSearchParams(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+    },
+  )}`;
+
+  try {
+    const loginPageResponse = await fetch(authorizationUrl, {
+      redirect: "manual",
+    });
+    assert.equal(loginPageResponse.status, 200);
+    const loginAction = (await loginPageResponse.text()).match(
+      /<form method="post" action="([^"]+)"/,
+    )?.[1];
+    assert.ok(loginAction);
+
+    const loginResponse = await fetch(address + loginAction, {
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      method: "POST",
+      body: new URLSearchParams({
+        username: "jane",
+        password: "password",
+      }).toString(),
+      redirect: "manual",
+    });
+    assert.equal(loginResponse.status, 302);
+    const setCookies = loginResponse.headers.getSetCookie();
+    assert.strictEqual(setCookies.length, 1);
+    const sessionCookie = setCookies[0].split(";", 1)[0];
+
+    const reusedSessionResponse = await fetch(authorizationUrl, {
+      headers: {
+        cookie: sessionCookie,
+      },
+      redirect: "manual",
+    });
+    assert.equal(reusedSessionResponse.status, 302);
+
+    const redirectUrl = getRedirectUrl(reusedSessionResponse);
+    const authorizationCode = redirectUrl.searchParams.get("code");
+    assert.ok(authorizationCode);
+    const authorizationCodeRecord =
+      authorizationCodeStore.loadAuthorizationCode(authorizationCode);
+    assert.ok(authorizationCodeRecord);
+    assert.deepEqual(
+      {
+        clientId: authorizationCodeRecord.clientId,
+        subject: authorizationCodeRecord.subject,
+        amr: authorizationCodeRecord.amr,
+        redirectUri: authorizationCodeRecord.redirectUri,
+      },
+      {
+        clientId: "client-id-opaque",
+        subject: janeUserId,
+        amr: ["pwd"],
+        redirectUri: "http://localhost:3000/callback",
+      },
+    );
+    assert.ok(authorizationCodeRecord.expiresAt > Date.now());
+  } finally {
+    await fastify.close();
+  }
+});
+
 test("authorization code can be issued and exchanged for an opaque access token", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();

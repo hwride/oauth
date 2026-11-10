@@ -25,7 +25,9 @@ Here are a list of some relevant OAuth specifications for this project.
 ## OpenID Connect
 - (2014-02) [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
 - (2014-02) [OpenID Connect Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html)
-
+- (2022-09) [OpenID Connect Session Management 1.0](https://openid.net/specs/openid-connect-session-1_0.html). Uses a hidden iframe to monitor login state. Browser 
+  restrictions on third-party cookies and storage can make cross-site monitoring unreliable.
+- (2022-09) [OpenID Connect RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)
 ## JWT / JOSE
 - (2015-05) [RFC 7519 JSON Web Token (JWT)](https://datatracker.ietf.org/doc/html/rfc7519)
 - (2015-05) [RFC 7515 JSON Web Signature (JWS)](https://datatracker.ietf.org/doc/html/rfc7515)

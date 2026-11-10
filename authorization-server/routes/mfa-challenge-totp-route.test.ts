@@ -8,6 +8,7 @@ import { createAuthorizationCodeStore } from "../stores/authorization-code-store
 import { createPendingAuthorizationStore } from "../stores/pending-authorization-store.ts";
 import { createUserStore } from "../stores/user-store.ts";
 import { getTestServerConfig } from "../test/test-utils.ts";
+import { isUuidV4 } from "../utils/uuid.ts";
 import { registerMfaChallengeTotpRoute } from "./mfa-challenge-totp-route.ts";
 
 let transactionId: string;
@@ -79,6 +80,17 @@ test("POST TOTP MFA challenge route accepts an OTP code", async () => {
     const response = await submitCode(fastify, transactionId, "123456");
 
     assert.equal(response.statusCode, 302);
+
+    // Check session cookie is set correctly.
+    const sessionCookie = response.headers["set-cookie"] as string;
+    assert.ok(sessionCookie);
+    const sessionCookieMatch = sessionCookie.match(
+      /__Host-Http-session-id=(?<sessionId>[^;]+); HttpOnly; Secure; SameSite=Lax; Path=\/; Max-Age=600/,
+    );
+    const sessionId = sessionCookieMatch?.groups?.sessionId;
+    assert.ok(sessionCookieMatch, "session cookie should match");
+    assert.ok(isUuidV4(sessionId), "cookie should have a UUIDv4 session ID");
+
     assert.equal(
       routeDependencies.pendingAuthorizationStore.loadPendingAuthorization(
         transactionId,

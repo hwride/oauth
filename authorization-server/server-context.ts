@@ -14,30 +14,39 @@ import {
   createRefreshTokenStore,
   type RefreshTokenStore,
 } from "./stores/refresh-token-store.ts";
+import {
+  createSessionStore,
+  type SessionStore,
+} from "./stores/session-store.ts";
 
 export type ServerContext = {
   serverConfig: ServerConfig;
   pendingAuthorizationStore: PendingAuthorizationStore;
   authorizationCodeStore: AuthorizationCodeStore;
+  sessionStore: SessionStore;
   tokenStore: TokenStore;
   userStore: UserStore;
   refreshTokenStore: RefreshTokenStore;
 };
 
-export async function createServerContext({
-  serverConfig,
-  pendingAuthorizationStore = createPendingAuthorizationStore(),
-  authorizationCodeStore = createAuthorizationCodeStore(),
-  tokenStore = createTokenStore(),
-  userStore = createUserStore(defaultUsers()),
-  refreshTokenStore = createRefreshTokenStore(),
-}: Partial<ServerContext> = {}): Promise<ServerContext> {
+export async function createServerContext(
+  overrides: Partial<ServerContext> = {},
+): Promise<ServerContext> {
+  const serverConfig = overrides.serverConfig ?? (await getServerConfig());
+
   return {
-    serverConfig: serverConfig ?? (await getServerConfig()),
-    pendingAuthorizationStore,
-    authorizationCodeStore,
-    tokenStore,
-    userStore,
-    refreshTokenStore,
+    serverConfig,
+    pendingAuthorizationStore:
+      overrides.pendingAuthorizationStore ?? createPendingAuthorizationStore(),
+    authorizationCodeStore:
+      overrides.authorizationCodeStore ?? createAuthorizationCodeStore(),
+    sessionStore:
+      overrides.sessionStore ??
+      createSessionStore({
+        sessionLengthSeconds: serverConfig.sessionLengthSeconds,
+      }),
+    tokenStore: overrides.tokenStore ?? createTokenStore(),
+    userStore: overrides.userStore ?? createUserStore(defaultUsers()),
+    refreshTokenStore: overrides.refreshTokenStore ?? createRefreshTokenStore(),
   };
 }

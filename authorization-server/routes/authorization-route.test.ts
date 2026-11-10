@@ -22,6 +22,7 @@ import {
   createPendingAuthorizationStore,
   type PendingAuthorizationStore,
 } from "../stores/pending-authorization-store.ts";
+import { isUuidV4 } from "../utils/uuid.ts";
 
 const defaultServerConfig = getTestServerConfig();
 
@@ -82,6 +83,16 @@ test("POST authorization endpoint redirects with an authorization code after log
     },
   );
   assert.ok(codeRecord.expiresAt > Date.now());
+
+  const cookies = response.headers.getSetCookie();
+  assert.strictEqual(cookies.length, 1);
+  const sessionCookie = cookies[0];
+  const sessCookieMatch = sessionCookie.match(
+    /__Host-Http-session-id=(?<sessionId>[^;]+); HttpOnly; Secure; SameSite=Lax; Path=\/; Max-Age=600/,
+  );
+  const sessionId = sessCookieMatch?.groups?.sessionId;
+  assert.ok(sessCookieMatch, "session cookie should match");
+  assert.ok(isUuidV4(sessionId), "cookie should have a UUIDv4 session ID");
 });
 
 test("POST authorization endpoint redirects to TOTP MFA challenge for users with MFA", async function () {
