@@ -18,6 +18,8 @@ import type {
 } from "../stores/user-store.ts";
 import { fromBase32 } from "../../util/base-encoding.ts";
 import { totpConfig } from "../config/totp-config.ts";
+import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
+import { getSessionCookie } from "../utils/session-utils.ts";
 
 type MfaChallengeQueryParams = {
   tx?: string;
@@ -30,6 +32,7 @@ export function registerMfaChallengeTotpRoute(
     pendingAuthorizationStore,
     authorizationCodeStore,
     userStore,
+    sessionStore,
   }: ServerContext,
   /** Function to create a TOTP validator. Mainly exposed for overwriting for test convenience. */
   createTotpValidator: (
@@ -229,17 +232,26 @@ export function registerMfaChallengeTotpRoute(
         );
     }
 
-    return reply.redirect(
-      createAuthorizationRedirectUrl(
-        serverConfig,
-        authorizationCodeStore,
-        authorizationRequest,
-        user,
-        // OIDC Authentication Method Reference values defined by RFC 8176:
-        // https://datatracker.ietf.org/doc/html/rfc8176
-        [...amr, "otp", "mfa"],
-      ),
-    );
+    // We successfully authenticated with MFA here, create a session.
+    // OIDC Authentication Method Reference values defined by RFC 8176:
+    // https://datatracker.ietf.org/doc/html/rfc8176
+    const amrUpdated: AuthenticationMethodReference[] = [...amr, "otp", "mfa"];
+    const session = sessionStore.newSession({
+      userId: user.userId,
+      amr: amrUpdated,
+    });
+
+    return reply
+      .header("Set-Cookie", getSessionCookie(session, serverConfig))
+      .redirect(
+        createAuthorizationRedirectUrl(
+          serverConfig,
+          authorizationCodeStore,
+          authorizationRequest,
+          user,
+          amrUpdated,
+        ),
+      );
   });
 }
 

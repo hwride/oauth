@@ -12,6 +12,8 @@ export type ServerConfig = {
   mfaTransactionLifetimeSeconds: number;
   mfaMaxAttempts: number;
   authorizationCodeLifetimeSeconds: number;
+  /** Length of the auth server session. */
+  sessionLengthSeconds: number;
 };
 
 export type KeyConfig = {
@@ -46,6 +48,7 @@ export async function getServerConfig(): Promise<ServerConfig> {
     mfaTransactionLifetimeSeconds: 60 * 10,
     mfaMaxAttempts: 5,
     authorizationCodeLifetimeSeconds: 60 * 10,
+    sessionLengthSeconds: 60 * 2,
   };
 }
 

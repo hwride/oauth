@@ -1,6 +1,6 @@
 import type { ServerContext } from "../server-context.ts";
 import { randomUUID } from "node:crypto";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { clientsConfig, type ClientConfig } from "../config/clients-config.ts";
 import {
   getResourceConfig,
@@ -17,6 +17,12 @@ import type {
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
 import { getAllowedScopesForUser } from "../utils/rbac-utils.ts";
+import {
+  getSessionCookie,
+  getSessionCookieClear,
+  loadSessionFromCookie,
+  sessionCookieName,
+} from "../utils/session-utils.ts";
 
 type AuthorizeQueryParams = {
   client_id?: string;
@@ -36,6 +42,7 @@ export function registerAuthorizationRoute(
     serverConfig,
     pendingAuthorizationStore,
     authorizationCodeStore,
+    sessionStore,
     userStore,
   }: ServerContext,
 ) {
@@ -54,6 +61,28 @@ export function registerAuthorizationRoute(
       return reply
         .code(validationResult.authorizationError.statusCode)
         .send(validationResult.authorizationError.error);
+    }
+
+    // If there's an existing auth server session, we can skip authentication and return immediately.
+    const sessionResult = loadSessionFromCookie(
+      request,
+      sessionStore,
+      userStore,
+    );
+    if (sessionResult.ok === true) {
+      return reply.redirect(
+        createAuthorizationRedirectUrl(
+          serverConfig,
+          authorizationCodeStore,
+          validationResult.authorizationRequest,
+          sessionResult.user,
+          sessionResult.session.amr,
+        ),
+      );
+    }
+    // If there is a problem with the session, proceed to normal login and clear the existing session if one was present.
+    else if (sessionResult.sessionIdWasPresent) {
+      reply.header("Set-Cookie", getSessionCookieClear());
     }
 
     const transactionId = pendingAuthorizationStore.newPendingAuthorization({
@@ -166,16 +195,25 @@ export function registerAuthorizationRoute(
       });
     }
 
-    return reply.redirect(
-      createAuthorizationRedirectUrl(
-        serverConfig,
-        authorizationCodeStore,
-        authorizationRequest,
-        user,
-        // Password authentication, represented by RFC 8176's "pwd" AMR value.
-        ["pwd"],
-      ),
-    );
+    // We successfully authenticated with password here, create a session.
+    const amr: AuthenticationMethodReference[] = ["pwd"];
+    const session = sessionStore.newSession({
+      userId: user.userId,
+      amr,
+    });
+
+    return reply
+      .header("Set-Cookie", getSessionCookie(session, serverConfig))
+      .redirect(
+        createAuthorizationRedirectUrl(
+          serverConfig,
+          authorizationCodeStore,
+          authorizationRequest,
+          user,
+          // Password authentication, represented by RFC 8176's "pwd" AMR value.
+          amr,
+        ),
+      );
   });
 }
 

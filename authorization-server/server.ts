@@ -1,5 +1,6 @@
 import { createServerContext, type ServerContext } from "./server-context.ts";
 import formbody from "@fastify/formbody";
+import cookie from "@fastify/cookie";
 import Fastify, { type FastifyInstance } from "fastify";
 import { clientsConfig } from "./config/clients-config.ts";
 import type { ServerConfig } from "./config/server-config.ts";
@@ -52,6 +53,7 @@ export async function createServer(overrides: Partial<ServerContext> = {}) {
   logAuthorizationServerConfig(fastify, context.serverConfig);
 
   fastify.register(formbody);
+  fastify.register(cookie);
 
   registerOpenIdConfigurationRoute(fastify, context);
   registerAuthorizationRoute(fastify, context);
