@@ -9,6 +9,7 @@ import type {
   PendingAuthorizationStore,
 } from "../stores/pending-authorization-store.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
+import { escapeHtml } from "../utils/html-utils.ts";
 import { createAuthorizationRedirectUrl } from "./authorization-route.ts";
 import { type ServerConfig } from "../config/server-config.ts";
 import type {
@@ -343,11 +344,3 @@ function createDefaultTotpValidator(
   });
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
