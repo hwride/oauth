@@ -13,7 +13,7 @@ import type {
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
 import { escapeHtml } from "../utils/html-utils.ts";
-import { createAuthorizationRedirectUrl } from "../utils/authorization-route-utils.ts";
+import { issueAuthorizationCodeAndRedirect } from "../utils/authorization-route-utils.ts";
 import {
   getSessionCookie,
   getSessionCookieClear,
@@ -67,7 +67,7 @@ export function registerAuthorizationRoute(
     );
     if (sessionResult.ok === true) {
       return reply.redirect(
-        createAuthorizationRedirectUrl(
+        issueAuthorizationCodeAndRedirect(
           serverConfig,
           authorizationCodeStore,
           validationResult.authorizationRequest,
@@ -201,7 +201,7 @@ export function registerAuthorizationRoute(
     return reply
       .header("Set-Cookie", getSessionCookie(session, serverConfig))
       .redirect(
-        createAuthorizationRedirectUrl(
+        issueAuthorizationCodeAndRedirect(
           serverConfig,
           authorizationCodeStore,
           authorizationRequest,
