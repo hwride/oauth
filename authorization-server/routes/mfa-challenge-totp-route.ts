@@ -10,13 +10,8 @@ import type {
 } from "../stores/pending-authorization-store.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
 import { escapeHtml } from "../utils/html-utils.ts";
-import { createAuthorizationRedirectUrl } from "../utils/authorization-route-utils.ts";
-import { type ServerConfig } from "../config/server-config.ts";
-import type {
-  MfaRegistration,
-  UserRecord,
-  UserStore,
-} from "../stores/user-store.ts";
+import { issueAuthorizationCodeAndRedirect } from "../utils/authorization-route-utils.ts";
+import type { MfaRegistration, UserRecord } from "../stores/user-store.ts";
 import { fromBase32 } from "../../util/base-encoding.ts";
 import { totpConfig } from "../config/totp-config.ts";
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
@@ -245,7 +240,7 @@ export function registerMfaChallengeTotpRoute(
     return reply
       .header("Set-Cookie", getSessionCookie(session, serverConfig))
       .redirect(
-        createAuthorizationRedirectUrl(
+        issueAuthorizationCodeAndRedirect(
           serverConfig,
           authorizationCodeStore,
           authorizationRequest,
@@ -343,4 +338,3 @@ function createDefaultTotpValidator(
     allowedTimeSteps: totpConfig.allowedTimeSteps,
   });
 }
-

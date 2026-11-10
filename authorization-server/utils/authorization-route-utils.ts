@@ -10,6 +10,7 @@ import type { AuthorizationRequest } from "../types/authorization-request.ts";
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
 import { getAllowedScopesForUser } from "./rbac-utils.ts";
 
+/** These are scopes that are always allowed. */
 const unrestrictedScopes = new Set([
   "openid",
   "profile",
@@ -20,11 +21,14 @@ const unrestrictedScopes = new Set([
 ]);
 
 /**
- * Create the redirect URL to be used after a successful authorization request.
+ * Create an authorization code and redirect URL after successful authentication.
+ *
+ * Also filters requested scopes against the user record and any requested resource's allowed scopes before saving the
+ * authorization code.
  *
  * See Redirection Endpoint https://www.rfc-editor.org/info/rfc6749/#section-3.1.2
  */
-export function createAuthorizationRedirectUrl(
+export function issueAuthorizationCodeAndRedirect(
   serverConfig: ServerConfig,
   authorizationCodeStore: AuthorizationCodeStore,
   authorizationRequest: AuthorizationRequest,
@@ -37,6 +41,7 @@ export function createAuthorizationRedirectUrl(
     subject: user.userId,
     amr,
     redirectUri: authorizationRequest.redirectUri,
+    // Filter scopes at authorization-code issuance flows use the user record available at the end of authentication.
     scope: filterAllowedScopes(
       authorizationRequest.scope,
       user,
