@@ -10,7 +10,7 @@ import type {
 } from "../stores/pending-authorization-store.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
 import { escapeHtml } from "../utils/html-utils.ts";
-import { createAuthorizationRedirectUrl } from "./authorization-route.ts";
+import { createAuthorizationRedirectUrl } from "../utils/authorization-route-utils.ts";
 import { type ServerConfig } from "../config/server-config.ts";
 import type {
   MfaRegistration,
