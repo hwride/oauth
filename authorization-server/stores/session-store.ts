@@ -17,6 +17,8 @@ export type Session = {
    * What authentication methods were used to create this session.
    */
   amr: AuthenticationMethodReference[];
+  /** When the user authenticated. Unix time in ms */
+  authTime: number;
 };
 
 export type SessionStoreConfig = {
@@ -30,7 +32,7 @@ export type SessionStore = {
   /**
    * Create a new session.
    */
-  newSession(opts: Pick<Session, "userId" | "amr">): Session;
+  newSession(opts: Pick<Session, "userId" | "amr" | "authTime">): Session;
 
   /**
    * Load a pending authorization session.

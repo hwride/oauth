@@ -59,6 +59,7 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
           scope: "openid",
           state: "state-value-123",
           nonce: "nonce-value-123",
+          max_age: "0",
           code_challenge: createS256CodeChallenge(codeVerifier),
           code_challenge_method: "S256",
         },
@@ -111,6 +112,8 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
     assert.equal(authorizationCodeRecord.clientId, clientConfig.clientId);
     assert.equal(authorizationCodeRecord.subject, testUserId);
     assert.deepEqual(authorizationCodeRecord.amr, ["pwd", "otp", "mfa"]);
+    assert.equal(authorizationCodeRecord.requiresAuthTime, true);
+    assert.equal(typeof authorizationCodeRecord.authTime, "number");
     assert.equal(
       authorizationCodeRecord.redirectUri,
       "http://localhost:3000/callback",
@@ -145,6 +148,10 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
       },
     );
     assert.deepEqual(verifiedIdToken.payload.amr, ["pwd", "otp", "mfa"]);
+    assert.equal(
+      verifiedIdToken.payload.auth_time,
+      Math.floor(authorizationCodeRecord.authTime / 1000),
+    );
     assert.equal(
       authorizationCodeStore.hasAuthorizationCode(authorizationCode),
       false,
@@ -235,6 +242,131 @@ test("authorization server reuses a session without requiring credentials", asyn
   }
 });
 
+test("max_age includes auth_time on initial and refreshed tokens", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const tokenStore = createTokenStore();
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
+    authorizationCodeStore,
+    tokenStore,
+  });
+  const address = await fastify.listen({
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const authorizationResponse = await authorizeClient(
+      address,
+      "client-id-jwt",
+      {
+        authorizationRequest: {
+          scope: "openid offline_access",
+          max_age: "0",
+        },
+      },
+    );
+    assert.equal(authorizationResponse.status, 302);
+
+    const authorizationCode = getRedirectUrl(authorizationResponse).searchParams.get(
+      "code",
+    );
+    assert.notEqual(authorizationCode, null);
+    const authorizationCodeRecord =
+      authorizationCodeStore.loadAuthorizationCode(authorizationCode);
+    assert.notEqual(authorizationCodeRecord, undefined);
+    assert.equal(authorizationCodeRecord.requiresAuthTime, true);
+
+    const tokenResponse = await fetchTokenEndpoint(
+      address,
+      authorizationCode,
+      "client-id-jwt",
+      "other-test-client-secret",
+    );
+    assert.equal(tokenResponse.status, 200);
+    const tokenResponseBody = (await tokenResponse.json()) as {
+      access_token: string;
+      id_token: string;
+      refresh_token: string;
+    };
+
+    const jwks = createRemoteJWKSet(
+      new URL(`${address}${new URL(defaultServerConfig.jwksUri).pathname}`),
+    );
+    const verifiedInitialIdToken = await jwtVerify(
+      tokenResponseBody.id_token,
+      jwks,
+      {
+        algorithms: ["RS256"],
+        issuer: defaultServerConfig.issuer,
+        audience: "client-id-jwt",
+      },
+    );
+    assert.equal(typeof verifiedInitialIdToken.payload.auth_time, "number");
+    assert.equal(
+      verifiedInitialIdToken.payload.auth_time,
+      Math.floor(authorizationCodeRecord.authTime / 1000),
+    );
+
+    const verifiedInitialAccessToken = await jwtVerify(
+      tokenResponseBody.access_token,
+      jwks,
+      {
+        algorithms: ["RS256"],
+        issuer: defaultServerConfig.issuer,
+        audience: defaultServerConfig.issuer,
+      },
+    );
+    assert.deepEqual(verifiedInitialAccessToken.payload.amr, ["pwd"]);
+    assert.equal(
+      verifiedInitialAccessToken.payload.auth_time,
+      verifiedInitialIdToken.payload.auth_time,
+    );
+
+    const refreshResponse = await fetchRefreshTokenEndpoint(
+      address,
+      tokenResponseBody.refresh_token,
+      "client-id-jwt",
+      "other-test-client-secret",
+    );
+    assert.equal(refreshResponse.status, 200);
+    const refreshResponseBody = (await refreshResponse.json()) as {
+      access_token: string;
+      id_token: string;
+    };
+    const verifiedRefreshIdToken = await jwtVerify(
+      refreshResponseBody.id_token,
+      jwks,
+      {
+        algorithms: ["RS256"],
+        issuer: defaultServerConfig.issuer,
+        audience: "client-id-jwt",
+      },
+    );
+    assert.equal(
+      verifiedRefreshIdToken.payload.auth_time,
+      verifiedInitialIdToken.payload.auth_time,
+    );
+
+    const verifiedRefreshAccessToken = await jwtVerify(
+      refreshResponseBody.access_token,
+      jwks,
+      {
+        algorithms: ["RS256"],
+        issuer: defaultServerConfig.issuer,
+        audience: defaultServerConfig.issuer,
+      },
+    );
+    assert.deepEqual(verifiedRefreshAccessToken.payload.amr, ["pwd"]);
+    assert.equal(
+      verifiedRefreshAccessToken.payload.auth_time,
+      verifiedInitialAccessToken.payload.auth_time,
+    );
+  } finally {
+    await fastify.close();
+  }
+});
+
 test("authorization code can be issued and exchanged for an opaque access token", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
@@ -289,6 +421,7 @@ test("authorization code can be issued and exchanged for an opaque access token"
       tokenStore.loadAccessToken(tokenResponseBody.access_token),
       {
         clientId: "client-id-opaque",
+        amr: ["pwd"],
       },
     );
   } finally {
@@ -559,6 +692,8 @@ test("OIDC authorization code flow with nonce", async function () {
     assert.equal(verifiedIdToken.payload.sub, janeUserId);
     assert.equal(verifiedIdToken.payload.name, "Jane Smith");
     assert.equal(verifiedIdToken.payload.nonce, nonce);
+    // auth_time is omitted when max_age was not requested.
+    assert.equal(verifiedIdToken.payload.auth_time, undefined);
     assert.equal(typeof verifiedIdToken.payload.jti, "string");
     assert.notEqual(verifiedIdToken.payload.jti.length, 0);
     assert.equal(typeof verifiedIdToken.payload.iat, "number");

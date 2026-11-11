@@ -11,6 +11,8 @@ test("refresh token store generates a token and stores refresh token record with
       resource: "https://orders-api.example.test",
       scope: "openid offline_access email",
       subject: "test-user",
+      authTime: 0,
+      requiresAuthTime: false,
     },
     172800,
   );
@@ -41,6 +43,8 @@ test("refresh token store deletes stored tokens", function () {
     {
       clientId: "client-id-opaque",
       subject: "test-user",
+      authTime: 0,
+      requiresAuthTime: false,
     },
     172800,
   );

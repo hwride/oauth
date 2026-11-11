@@ -288,6 +288,7 @@ test("POST token endpoint returns an opaque access token for valid plain PKCE ex
   assert.notEqual(tokenResponse.access_token.length, 0);
   assert.deepEqual(tokenStore.loadAccessToken(tokenResponse.access_token), {
     clientId: "client-id-opaque",
+    amr: ["pwd"],
   });
   assert.equal(
     authorizationCodeStore.hasAuthorizationCode("test-auth-code"),
@@ -330,6 +331,7 @@ test("POST token endpoint returns an opaque access token for valid S256 PKCE exc
   assert.notEqual(tokenResponse.access_token.length, 0);
   assert.deepEqual(tokenStore.loadAccessToken(tokenResponse.access_token), {
     clientId: "client-id-opaque",
+    amr: ["pwd"],
   });
   assert.equal(
     authorizationCodeStore.hasAuthorizationCode("test-auth-code"),
@@ -367,11 +369,45 @@ test("POST token endpoint returns an opaque access token for valid code exchange
   assert.notEqual(tokenResponse.access_token.length, 0);
   assert.deepEqual(tokenStore.loadAccessToken(tokenResponse.access_token), {
     clientId: "client-id-opaque",
+    amr: ["pwd"],
   });
   assert.equal(
     authorizationCodeStore.hasAuthorizationCode("test-auth-code"),
     false,
   );
+});
+
+test("POST token endpoint stores auth context with an opaque access token", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStoreWithCodeForClient(
+    "client-id-opaque",
+  );
+  const authorizationCodeRecord =
+    authorizationCodeStore.loadAuthorizationCode("test-auth-code");
+  assert.ok(authorizationCodeRecord);
+  authorizationCodeRecord.amr = ["pwd", "otp"];
+  authorizationCodeRecord.authTime = 1_700_000_123_456;
+  authorizationCodeRecord.requiresAuthTime = true;
+
+  const tokenStore = createTokenStore();
+  const response = await fetchTokenEndpoint(
+    {
+      grant_type: "authorization_code",
+      code: "test-auth-code",
+      redirect_uri: "http://localhost:3000/callback",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    createBasicAuthHeader("client-id-opaque", "test-client-secret"),
+    tokenStore,
+  );
+
+  assert.equal(response.status, 200);
+  const tokenResponse = (await response.json()) as { access_token: string };
+  assert.deepEqual(tokenStore.loadAccessToken(tokenResponse.access_token), {
+    clientId: "client-id-opaque",
+    amr: ["pwd", "otp"],
+    authTime: 1_700_000_123,
+  });
 });
 
 test("POST token endpoint makes authorization codes one-time use", async function () {
@@ -452,6 +488,8 @@ test("POST token endpoint returns a signed jwt for jwt access token type", async
   assert.equal(verified.payload.aud, defaultServerConfig.issuer);
   assert.equal(verified.payload.sub, "test-user-id");
   assert.equal(verified.payload.client_id, "client-id-jwt");
+  assert.deepEqual(verified.payload.amr, ["pwd"]);
+  assert.equal(verified.payload.auth_time, undefined);
   assert.equal(typeof verified.payload.jti, "string");
   assert.notEqual(verified.payload.jti.length, 0);
   assert.equal(typeof verified.payload.iat, "number");
@@ -791,6 +829,44 @@ test("POST token endpoint includes refresh_token when scope includes offline_acc
   );
 });
 
+test("POST token endpoint includes auth context claims in a jwt access token", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStoreWithCodeForClient(
+    "client-id-jwt",
+  );
+  const authorizationCodeRecord =
+    authorizationCodeStore.loadAuthorizationCode("test-auth-code");
+  assert.ok(authorizationCodeRecord);
+  authorizationCodeRecord.amr = ["pwd", "otp"];
+  authorizationCodeRecord.authTime = 1_700_000_123_456;
+  authorizationCodeRecord.requiresAuthTime = true;
+
+  const response = await fetchTokenEndpoint(
+    {
+      grant_type: "authorization_code",
+      code: "test-auth-code",
+      redirect_uri: "http://localhost:3000/callback",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    createBasicAuthHeader("client-id-jwt", "other-test-client-secret"),
+  );
+
+  assert.equal(response.status, 200);
+  const tokenResponse = (await response.json()) as { access_token: string };
+  const verified = await jwtVerify(
+    tokenResponse.access_token,
+    defaultServerConfig.signingKey.publicKey,
+    {
+      algorithms: ["RS256"],
+      issuer: defaultServerConfig.issuer,
+      audience: defaultServerConfig.issuer,
+    },
+  );
+
+  assert.deepEqual(verified.payload.amr, ["pwd", "otp"]);
+  assert.equal(verified.payload.auth_time, 1_700_000_123);
+});
+
 test("POST token endpoint stores resource indicator with refresh_token", async function () {
   const authorizationCodeStore = createAuthorizationCodeStoreWithCodeForClient(
     "client-id-opaque",
@@ -888,6 +964,8 @@ test("POST token endpoint rejects expired refresh token and deletes it", async f
     {
       clientId: "client-id-opaque",
       subject: "test-user-id",
+      authTime: 0,
+      requiresAuthTime: false,
     },
     -1,
   );
@@ -918,6 +996,8 @@ test("POST token endpoint rejects refresh token issued to a different client", a
     {
       clientId: "client-id-jwt",
       subject: "test-user-id",
+      authTime: 0,
+      requiresAuthTime: false,
     },
     172800,
   );
@@ -949,6 +1029,8 @@ test("POST token endpoint keeps resource audience when issuing an access token f
       resource: ordersApiResource,
       scope: "offline_access orders:read",
       subject: "test-user-id",
+      authTime: 0,
+      requiresAuthTime: false,
     },
     172800,
   );
@@ -990,6 +1072,8 @@ test("POST token endpoint keeps openid issuer and resource audiences when issuin
       resource: ordersApiResource,
       scope: "openid offline_access orders:read",
       subject: "test-user-id",
+      authTime: 0,
+      requiresAuthTime: false,
     },
     172800,
   );
@@ -1033,6 +1117,8 @@ test("POST token endpoint returns access token without rotating static refresh t
       clientId: "client-id-opaque",
       scope: "offline_access email",
       subject: "test-user-id",
+      authTime: 0,
+      requiresAuthTime: false,
     },
     172800,
   );
@@ -1161,6 +1247,8 @@ function createAuthorizationCodeStoreWithCodeExpiresAtForClient(
   authorizationCodeStore.saveAuthorizationCode("test-auth-code", {
     clientId,
     subject,
+    authTime: 0,
+    requiresAuthTime: false,
     amr: ["pwd"],
     redirectUri: "http://localhost:3000/callback",
     scope,
@@ -1186,6 +1274,8 @@ function createAuthorizationCodeStoreWithCodeAndPkce({
   authorizationCodeStore.saveAuthorizationCode("test-auth-code", {
     clientId,
     subject: "test-user-id",
+    authTime: 0,
+    requiresAuthTime: false,
     amr: ["pwd"],
     redirectUri: "http://localhost:3000/callback",
     expiresAt,

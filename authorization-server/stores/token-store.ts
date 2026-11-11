@@ -1,6 +1,11 @@
+import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
+
 export type AccessTokenRecord = {
   clientId: string;
   scope?: string;
+  amr?: AuthenticationMethodReference[];
+  /** Unix time in seconds (not ms) */
+  authTime?: number;
 };
 
 export type TokenStore = {

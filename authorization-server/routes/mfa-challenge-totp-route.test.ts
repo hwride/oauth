@@ -6,6 +6,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { testUserId, defaultUsers } from "../default-users.ts";
 import { createAuthorizationCodeStore } from "../stores/authorization-code-store.ts";
 import { createPendingAuthorizationStore } from "../stores/pending-authorization-store.ts";
+import { createSessionStore } from "../stores/session-store.ts";
 import { createUserStore } from "../stores/user-store.ts";
 import { getTestServerConfig } from "../test/test-utils.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
@@ -77,6 +78,7 @@ test("POST TOTP MFA challenge route accepts an OTP code", async () => {
   await registerTestRoute(fastify, routeDependencies);
 
   try {
+    const beforeSubmit = Date.now();
     const response = await submitCode(fastify, transactionId, "123456");
 
     assert.equal(response.statusCode, 302);
@@ -90,6 +92,25 @@ test("POST TOTP MFA challenge route accepts an OTP code", async () => {
     const sessionId = sessionCookieMatch?.groups?.sessionId;
     assert.ok(sessionCookieMatch, "session cookie should match");
     assert.ok(isUuidV4(sessionId), "cookie should have a UUIDv4 session ID");
+
+    const session = routeDependencies.sessionStore.loadSession(sessionId);
+    assert.ok(session);
+    assert.equal(session.userId, testUserId);
+    assert.deepEqual(session.amr, ["pwd", "otp", "mfa"]);
+    assert.ok(session.authTime >= beforeSubmit);
+    assert.ok(session.authTime <= Date.now());
+
+    const authorizationCode = new URL(
+      response.headers.location as string,
+    ).searchParams.get("code");
+    assert.ok(authorizationCode);
+    const authorizationCodeRecord =
+      routeDependencies.authorizationCodeStore.loadAuthorizationCode(
+        authorizationCode,
+      );
+    assert.ok(authorizationCodeRecord);
+    assert.equal(authorizationCodeRecord.authTime, session.authTime);
+    assert.equal(authorizationCodeRecord.requiresAuthTime, false);
 
     assert.equal(
       routeDependencies.pendingAuthorizationStore.loadPendingAuthorization(
@@ -208,6 +229,7 @@ test("MFA challenge route rejects a transaction that is not waiting for MFA", as
       amr: [],
       mfaFailedAttempts: 0,
       expiresAt: Date.now() + 60_000,
+      requiresAuthTime: false,
     }),
   );
   await registerTestRoute(fastify, routeDependencies);
@@ -343,9 +365,11 @@ function setupRoute(expiresAt = Date.now() + 60_000) {
     amr: ["pwd"],
     mfaFailedAttempts: 0,
     expiresAt,
+    requiresAuthTime: false,
   });
 
   const authorizationCodeStore = createAuthorizationCodeStore();
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
   const userStore = createUserStore(defaultUsers());
   const totpValidator = {
     validate: async (code: string) => ({ isValid: code === "123456" }),
@@ -354,6 +378,7 @@ function setupRoute(expiresAt = Date.now() + 60_000) {
   return {
     pendingAuthorizationStore,
     authorizationCodeStore,
+    sessionStore,
     userStore,
     totpValidator,
   };
@@ -369,6 +394,7 @@ async function registerTestRoute(
       serverConfig: getTestServerConfig(),
       pendingAuthorizationStore: routeDependencies.pendingAuthorizationStore,
       authorizationCodeStore: routeDependencies.authorizationCodeStore,
+      sessionStore: routeDependencies.sessionStore,
       userStore: routeDependencies.userStore,
     }),
     () => routeDependencies.totpValidator,

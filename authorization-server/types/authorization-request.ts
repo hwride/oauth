@@ -10,6 +10,8 @@ export type AuthorizationRequest = {
   codeChallenge?: string;
   codeChallengeMethod?: "plain" | "S256";
   resource?: SupportedResource;
+  /** Maximum elapsed time in seconds since the End-User's last active authentication. */
+  maxAge?: number;
 };
 
 export type AuthorizationRequestError = {

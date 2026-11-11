@@ -159,5 +159,6 @@ function createRecord(
     amr: ["pwd"],
     mfaFailedAttempts: 0,
     expiresAt,
+    requiresAuthTime: false,
   };
 }

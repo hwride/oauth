@@ -13,7 +13,11 @@ const sessionStoreConfig: SessionStoreConfig = {
 test("newSession", function () {
   const store = createSessionStore(sessionStoreConfig);
 
-  const session = store.newSession({ userId: "user1", amr: ["pwd"] });
+  const session = store.newSession({
+    userId: "user1",
+    amr: ["pwd"],
+    authTime: 0,
+  });
 
   assert.equal(session.userId, "user1");
   assert.ok(isUuidV4(session.sessionId), "session is UUIDv4");
@@ -31,7 +35,11 @@ test("newSession", function () {
 
 test("session store returns defensive copies", function () {
   const store = createSessionStore(sessionStoreConfig);
-  const session = store.newSession({ userId: "user1", amr: ["pwd"] });
+  const session = store.newSession({
+    userId: "user1",
+    amr: ["pwd"],
+    authTime: 0,
+  });
 
   session.amr.push("otp");
 
@@ -53,7 +61,11 @@ test("session store returns undefined for missing sessions", function () {
 
 test("session store removes expired sessions when loading", function () {
   const store = createSessionStore({ sessionLengthSeconds: -1 });
-  const session = store.newSession({ userId: "user1", amr: ["pwd"] });
+  const session = store.newSession({
+    userId: "user1",
+    amr: ["pwd"],
+    authTime: 0,
+  });
 
   assert.equal(store.loadSession(session.sessionId), undefined);
   assert.equal(store.deleteSession(session.sessionId), false);
@@ -61,7 +73,11 @@ test("session store removes expired sessions when loading", function () {
 
 test("session store deletes sessions and reports whether one existed", function () {
   const store = createSessionStore(sessionStoreConfig);
-  const session = store.newSession({ userId: "user1", amr: ["pwd"] });
+  const session = store.newSession({
+    userId: "user1",
+    amr: ["pwd"],
+    authTime: 0,
+  });
 
   assert.equal(store.deleteSession(session.sessionId), true);
   assert.equal(store.loadSession(session.sessionId), undefined);
@@ -70,7 +86,11 @@ test("session store deletes sessions and reports whether one existed", function 
 
 test("session store refuses to delete an expired session", function () {
   const store = createSessionStore({ sessionLengthSeconds: -1 });
-  const session = store.newSession({ userId: "user1", amr: ["pwd"] });
+  const session = store.newSession({
+    userId: "user1",
+    amr: ["pwd"],
+    authTime: 0,
+  });
 
   assert.equal(store.deleteSession(session.sessionId), false);
   assert.equal(store.loadSession(session.sessionId), undefined);

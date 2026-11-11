@@ -253,6 +253,9 @@ async function authCodeGrant({
   // Remove the authorization code so it can't be re-used.
   authorizationCodeStore.deleteAuthorizationCode(body.code);
 
+  const authTime = getAuthTimeForTokens(authCodeRecord);
+
+  // Issue an access token.
   const access_token = await generateAccessToken({
     serverConfig,
     clientConfig,
@@ -260,6 +263,8 @@ async function authCodeGrant({
     scope: authCodeRecord.scope,
     subject: authCodeRecord.subject,
     resource: authCodeRecord.resource,
+    amr: authCodeRecord.amr,
+    authTime,
   });
 
   const response: AuthorizationCodeGrantResponse = {
@@ -283,9 +288,10 @@ async function authCodeGrant({
       clientConfig,
       scope: authCodeRecord.scope,
       subject: authCodeRecord.subject,
-      amr: authCodeRecord.amr,
       nonce: authCodeRecord.nonce,
       userStore,
+      amr: authCodeRecord.amr,
+      authTime,
     });
   }
 
@@ -298,6 +304,8 @@ async function authCodeGrant({
         scope: authCodeRecord.scope,
         subject: authCodeRecord.subject,
         amr: authCodeRecord.amr,
+        requiresAuthTime: authCodeRecord.requiresAuthTime,
+        authTime: authCodeRecord.authTime,
       },
       clientConfig.refreshTokenLifetimeSeconds,
     );
@@ -365,6 +373,8 @@ async function refreshTokenGrant({
     });
   }
 
+  const authTime = getAuthTimeForTokens(refreshRecord);
+
   // Issue a new access token.
   const access_token = await generateAccessToken({
     serverConfig,
@@ -373,6 +383,8 @@ async function refreshTokenGrant({
     resource: refreshRecord.resource,
     scope: refreshRecord.scope,
     subject: refreshRecord.subject,
+    amr: refreshRecord.amr,
+    authTime,
   });
   // https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
   const response: RefreshTokenGrantResponse = {
@@ -393,11 +405,12 @@ async function refreshTokenGrant({
     response.id_token = await generateIdToken({
       serverConfig,
       clientConfig,
+      userStore,
       scope: refreshRecord.scope,
       subject: refreshRecord.subject,
       amr: refreshRecord.amr,
       // no nonce on refresh requests
-      userStore,
+      authTime,
     });
   }
 
@@ -433,6 +446,12 @@ function parseBasicAuthorizationHeader(
   };
 }
 
+/**
+ * Generate an access token.
+ *
+ * OAuth 2.0 Access Token - https://www.rfc-editor.org/info/rfc6749/#section-1.4
+ * JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens https://datatracker.ietf.org/doc/html/rfc9068
+ */
 async function generateAccessToken({
   serverConfig,
   clientConfig,
@@ -440,6 +459,8 @@ async function generateAccessToken({
   scope,
   subject,
   resource,
+  amr,
+  authTime,
 }: {
   serverConfig: ServerConfig;
   clientConfig: ClientConfig;
@@ -447,6 +468,8 @@ async function generateAccessToken({
   scope?: string;
   subject: string;
   resource?: string;
+  amr?: AuthenticationMethodReference[];
+  authTime?: number;
 }) {
   if (clientConfig.accessTokenType === "opaque") {
     // Generate and save an access token.
@@ -454,6 +477,18 @@ async function generateAccessToken({
     const accessTokenRecord: AccessTokenRecord = {
       clientId: clientConfig.clientId,
     };
+
+    // OAuth 2.0 Step Up Authentication Challenge Protocol, Token Introspection
+    // https://www.rfc-editor.org/rfc/rfc9470.html#name-oauth-20-token-introspection
+    // This defines providing acr and auth_time on the introspection endpoint.
+    // As we include amr on our JWT tokens, save that too for opaque tokens.
+    if (amr) {
+      accessTokenRecord.amr = amr;
+    }
+    if (authTime != null) {
+      accessTokenRecord.authTime = authTime;
+    }
+
     if (scope) {
       accessTokenRecord.scope = scope;
     }
@@ -471,6 +506,14 @@ async function generateAccessToken({
       client_id: clientConfig.clientId,
       jti: randomUUID(),
     };
+
+    if (amr) {
+      payload.amr = amr;
+    }
+    if (authTime != null) {
+      payload.auth_time = authTime;
+    }
+
     if (scope) {
       payload.scope = scope;
     }
@@ -489,19 +532,21 @@ async function generateAccessToken({
 async function generateIdToken({
   serverConfig,
   clientConfig,
+  userStore,
   scope,
   subject,
   nonce,
-  userStore,
   amr,
+  authTime,
 }: {
   serverConfig: ServerConfig;
   clientConfig: ClientConfig;
+  userStore: UserStore;
   scope?: string;
   subject: string;
-  amr?: AuthenticationMethodReference[];
   nonce?: string;
-  userStore: UserStore;
+  amr?: AuthenticationMethodReference[];
+  authTime?: number;
 }) {
   const idTokenPayload: JWTPayload = {
     iss: serverConfig.issuer,
@@ -516,6 +561,9 @@ async function generateIdToken({
     // OIDC Core defines the amr claim for ID Tokens:
     // https://openid.net/specs/openid-connect-core-1_0.html#IDToken
     idTokenPayload.amr = amr;
+  }
+  if (authTime != null) {
+    idTokenPayload.auth_time = authTime;
   }
 
   // https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims
@@ -560,4 +608,23 @@ function hasOpenIdScope(scope: string | undefined) {
 
 function hasScope(scope: string | undefined, expectedScope: string) {
   return scope?.split(/\s+/).includes(expectedScope) ?? false;
+}
+
+/**
+ * Get the auth time to include on tokens. Only returns if required, and converts to seconds.
+ */
+export function getAuthTimeForTokens({
+  requiresAuthTime,
+  authTime,
+}: {
+  requiresAuthTime: boolean;
+  /** Auth time in ms Unix time */
+  authTime: number;
+}) {
+  if (requiresAuthTime) {
+    // Round down to avoid accidentally giving an auth_time in the future.
+    return Math.floor(authTime / 1000);
+  } else {
+    return undefined;
+  }
 }

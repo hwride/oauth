@@ -12,6 +12,7 @@ type SignupPageQueryParams = {
   state?: string;
   code_challenge?: string;
   code_challenge_method?: string;
+  max_age?: string;
   name?: string;
 };
 
@@ -44,6 +45,7 @@ export function registerSignupRoute(
       state?: string;
       code_challenge?: string;
       code_challenge_method?: string;
+      max_age?: string;
       username?: string;
       name?: string;
       password?: string;
@@ -112,6 +114,9 @@ export function registerSignupRoute(
         request.body.code_challenge_method,
       );
     }
+    if (request.body.max_age) {
+      loginUrl.searchParams.set("max_age", request.body.max_age);
+    }
 
     return reply.redirect(loginUrl.pathname + loginUrl.search);
   });
@@ -149,6 +154,7 @@ function renderSignupPage({
       <input type="hidden" name="state" value="${escapeHtml(signupQueryParams.state ?? "")}">
       <input type="hidden" name="code_challenge" value="${escapeHtml(signupQueryParams.code_challenge ?? "")}">
       <input type="hidden" name="code_challenge_method" value="${escapeHtml(signupQueryParams.code_challenge_method ?? "")}">
+      <input type="hidden" name="max_age" value="${escapeHtml(signupQueryParams.max_age ?? "")}">
       <label>
         Username
         <input type="text" name="username" autocomplete="username" required>
@@ -196,6 +202,9 @@ function createLinkWithParams(path: string, params: SignupPageQueryParams) {
   }
   if (params.code_challenge_method) {
     url.searchParams.set("code_challenge_method", params.code_challenge_method);
+  }
+  if (params.max_age) {
+    url.searchParams.set("max_age", params.max_age);
   }
   return url.pathname + url.search;
 }

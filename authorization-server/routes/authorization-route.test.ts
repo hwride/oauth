@@ -22,6 +22,11 @@ import {
   createPendingAuthorizationStore,
   type PendingAuthorizationStore,
 } from "../stores/pending-authorization-store.ts";
+import {
+  createSessionStore,
+  type SessionStore,
+} from "../stores/session-store.ts";
+import { getSessionCookieClear } from "../utils/session-utils.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
 
 const defaultServerConfig = getTestServerConfig();
@@ -45,6 +50,135 @@ test("GET authorization endpoint renders a login form for a valid request", asyn
   );
   assert.match(await response.text(), /<form method="post"/);
   assert.equal(authorizationCodeStore.isEmpty(), true);
+});
+
+test("GET authorization endpoint clears an invalid session cookie before showing login", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const sessionStore = createSessionStore({ sessionLengthSeconds: -1 });
+  const session = sessionStore.newSession({
+    userId: janeUserId,
+    amr: ["pwd"],
+    authTime: 0,
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    undefined,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /<form method="post"/);
+  assert.deepEqual(response.headers.getSetCookie(), [getSessionCookieClear()]);
+});
+
+test("GET authorization endpoint reuses a fresh session for max_age and save auth_time", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
+  const session = sessionStore.newSession({
+    userId: janeUserId,
+    amr: ["pwd"],
+    authTime: Date.now(),
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      max_age: "60",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    undefined,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.getSetCookie().length, 0);
+  const code = getRedirectUrl(response).searchParams.get("code");
+  assert.notEqual(code, null);
+  const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.equal(codeRecord.requiresAuthTime, true);
+  assert.equal(codeRecord.authTime, session.authTime);
+});
+
+test("GET authorization endpoint requires login for a stale max_age session", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
+  const session = sessionStore.newSession({
+    userId: janeUserId,
+    amr: ["pwd"],
+    authTime: Date.now() - 61_000,
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      max_age: "60",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    undefined,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /<form method="post"/);
+  assert.equal(response.headers.getSetCookie().length, 0);
+  assert.equal(authorizationCodeStore.isEmpty(), true);
+});
+
+test("GET authorization endpoint always requires login for max_age=0", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
+  const session = sessionStore.newSession({
+    userId: janeUserId,
+    amr: ["pwd"],
+    authTime: Date.now(),
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      max_age: "0",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    undefined,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /<form method="post"/);
+  // No Set-Cookie - checking that existing auth server session isn't cleared.
+  assert.equal(response.headers.getSetCookie().length, 0);
+  assert.equal(authorizationCodeStore.isEmpty(), true);
+});
+
+test("GET authorization endpoint rejects an invalid max_age", async function () {
+  const response = await fetchAuthorizationLoginPage({
+    client_id: "client-id-opaque",
+    response_type: "code",
+    redirect_uri: "http://localhost:3000/callback",
+    max_age: "not-a-number",
+  });
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "invalid_request",
+    error_description: "Invalid max_age",
+  });
 });
 
 test("POST authorization endpoint redirects with an authorization code after login", async function () {
@@ -489,6 +623,7 @@ test("GET authorization endpoint sign up link preserves PKCE parameters", async 
     state: "state-value-123",
     code_challenge: "challenge-value-123",
     code_challenge_method: "S256",
+    max_age: "60",
   });
 
   assert.equal(response.status, 200);
@@ -496,7 +631,7 @@ test("GET authorization endpoint sign up link preserves PKCE parameters", async 
   const html = await response.text();
   assert.match(
     html,
-    /href="\/signup\?client_id=client-id-opaque&amp;response_type=code&amp;redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback&amp;state=state-value-123&amp;code_challenge=challenge-value-123&amp;code_challenge_method=S256"/,
+    /href="\/signup\?client_id=client-id-opaque&amp;response_type=code&amp;redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback&amp;state=state-value-123&amp;code_challenge=challenge-value-123&amp;code_challenge_method=S256&amp;max_age=60"/,
   );
 });
 
@@ -703,11 +838,16 @@ async function fetchAuthorizationLoginPage(
   serverConfig: ServerConfig = defaultServerConfig,
   authorizationCodeStore: AuthorizationCodeStore = createAuthorizationCodeStore(),
   userStore: UserStore = createUserStore(defaultUsers()),
+  sessionStore: SessionStore = createSessionStore({
+    sessionLengthSeconds: serverConfig.sessionLengthSeconds,
+  }),
+  cookie?: string,
 ) {
   const fastify = await createServer({
     serverConfig,
     authorizationCodeStore,
     userStore,
+    sessionStore,
   });
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -721,6 +861,7 @@ async function fetchAuthorizationLoginPage(
 
     return await fetch(`${address}${authorizationPath}?${queryString}`, {
       redirect: "manual",
+      headers: cookie ? { cookie } : undefined,
     });
   } finally {
     await fastify.close();

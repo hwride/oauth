@@ -28,6 +28,10 @@ export type PendingAuthorizationRecord = {
    * The number of times an MFA attempt has failed for this pending authorization.
    */
   mfaFailedAttempts: number;
+  /**
+   * Whether auth_time is a required claim on the token response.
+   */
+  requiresAuthTime: boolean;
 };
 
 /**
