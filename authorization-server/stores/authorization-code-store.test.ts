@@ -10,6 +10,8 @@ test("authorization code store saves and loads authorization code records", func
   const authorizationCodeRecord: AuthorizationCodeRecord = {
     clientId: "client-id-opaque",
     subject: "test-user",
+    authTime: 0,
+    requiresAuthTime: false,
     amr: ["pwd"],
     redirectUri: "http://localhost:3000/callback",
     expiresAt: Date.now() + 60_000,
@@ -50,6 +52,8 @@ test("authorization code store deletes stored authorization codes", function () 
   authorizationCodeStore.saveAuthorizationCode("test-auth-code", {
     clientId: "client-id-opaque",
     subject: "test-user",
+    authTime: 0,
+    requiresAuthTime: false,
     amr: ["pwd"],
     redirectUri: "http://localhost:3000/callback",
     expiresAt: Date.now() + 60_000,

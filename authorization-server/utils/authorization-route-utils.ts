@@ -34,6 +34,8 @@ export function issueAuthorizationCodeAndRedirect(
   authorizationRequest: AuthorizationRequest,
   user: UserRecord,
   amr: AuthenticationMethodReference[],
+  authTime: number,
+  requiresAuthTime: boolean,
 ) {
   const code = randomUUID();
   authorizationCodeStore.saveAuthorizationCode(code, {
@@ -53,6 +55,8 @@ export function issueAuthorizationCodeAndRedirect(
       Date.now() + serverConfig.authorizationCodeLifetimeSeconds * 1000,
     codeChallenge: authorizationRequest.codeChallenge,
     codeChallengeMethod: authorizationRequest.codeChallengeMethod,
+    authTime,
+    requiresAuthTime,
   });
 
   const redirectUrl = new URL(authorizationRequest.redirectUri);

@@ -75,9 +75,7 @@ export function registerAuthorizeRoute(
     if (scope) {
       const trimmedScope = scope.trim();
       authorizeQueryParams.scope = trimmedScope;
-      authFlowContext.isOidcFlow = trimmedScope
-        .split(/\s+/)
-        .includes("openid");
+      authFlowContext.isOidcFlow = trimmedScope.split(/\s+/).includes("openid");
     } else {
       authFlowContext.isOidcFlow = false;
     }
@@ -127,7 +125,7 @@ function parseMaxAge(maxAgeValue: string): number | undefined {
   }
 
   const parsed = Number(trimmedValue);
-  if (!Number.isInteger(parsed) || parsed < 0) {
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
     return undefined;
   }
 

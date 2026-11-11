@@ -17,6 +17,7 @@ test("loadSessionFromCookie loads the session and its user", function () {
   const session = sessionStore.newSession({
     userId: user.userId,
     amr: ["pwd"],
+    authTime: 0,
   });
 
   assert.deepEqual(
@@ -35,6 +36,7 @@ test("loadSessionFromCookie reports whether a session cookie was present", funct
   const session = sessionStore.newSession({
     userId: "user-id",
     amr: ["pwd"],
+    authTime: 0,
   });
 
   assert.deepEqual(
@@ -64,6 +66,7 @@ test("loadSessionFromCookie deletes sessions whose user no longer exists", funct
   const session = sessionStore.newSession({
     userId: "deleted-user",
     amr: ["pwd"],
+    authTime: 0,
   });
 
   assert.deepEqual(
@@ -84,6 +87,7 @@ test("getSessionCookie serializes the session cookie attributes", function () {
     createdAt: 0,
     expiresAt: 600_000,
     amr: ["pwd"],
+    authTime: 0,
   };
 
   assert.equal(

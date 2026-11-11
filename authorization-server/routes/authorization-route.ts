@@ -30,6 +30,7 @@ type AuthorizeQueryParams = {
   code_challenge?: string;
   code_challenge_method?: string;
   resource?: string;
+  max_age?: string;
 };
 
 export function registerAuthorizationRoute(
@@ -46,12 +47,15 @@ export function registerAuthorizationRoute(
     .pathname;
 
   // Main authorization endpoint.
+  // Authentication Request - https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1
   fastify.get<{
     Querystring: AuthorizeQueryParams;
   }>(authorizationEndpointPath, async function (request, reply) {
     // Make sure we don't leak tx ID query param.
     reply.header("cache-control", "no-store");
     reply.header("referrer-policy", "no-referrer");
+
+    // Validate authorization request data.
     const validationResult = validateAuthorizationRequest(request.query);
     if (validationResult.ok === false) {
       return reply
@@ -59,34 +63,57 @@ export function registerAuthorizationRoute(
         .send(validationResult.authorizationError.error);
     }
 
-    // If there's an existing auth server session, we can skip authentication and return immediately.
+    const { authorizationRequest } = validationResult;
+    const { maxAge } = authorizationRequest;
+    const requiresAuthTime = maxAge != null;
+
+    // If there's an existing auth server session and it passes max_age requirements, we can skip authentication and
+    // return immediately.
     const sessionResult = loadSessionFromCookie(
       request,
       sessionStore,
       userStore,
     );
     if (sessionResult.ok === true) {
-      return reply.redirect(
-        issueAuthorizationCodeAndRedirect(
-          serverConfig,
-          authorizationCodeStore,
-          validationResult.authorizationRequest,
-          sessionResult.user,
-          sessionResult.session.amr,
-        ),
-      );
+      const issueCodeAndRedirectForActiveSession = () =>
+        reply.redirect(
+          issueAuthorizationCodeAndRedirect(
+            serverConfig,
+            authorizationCodeStore,
+            authorizationRequest,
+            sessionResult.user,
+            sessionResult.session.amr,
+            sessionResult.session.authTime,
+            requiresAuthTime,
+          ),
+        );
+
+      // If max_age was included, check if our session passes the freshness check.
+      if (maxAge != null && maxAge > 0) {
+        const maxAgeMs = maxAge * 1000;
+        const sessionAge = Date.now() - sessionResult.session.authTime;
+        if (sessionAge <= maxAgeMs) {
+          return issueCodeAndRedirectForActiveSession();
+        }
+      }
+      // Otherwise allow re-use of the session, as long as max_age is not 0.
+      else if (maxAge !== 0) {
+        return issueCodeAndRedirectForActiveSession();
+      }
     }
     // If there is a problem with the session, proceed to normal login and clear the existing session if one was present.
     else if (sessionResult.sessionIdWasPresent) {
       reply.header("Set-Cookie", getSessionCookieClear());
     }
 
+    // Create a new pending authorization transaction.
     const transactionId = pendingAuthorizationStore.newPendingAuthorization({
       stage: "login",
       authorizationRequest: validationResult.authorizationRequest,
       amr: [],
       mfaFailedAttempts: 0,
       expiresAt: Date.now() + serverConfig.mfaTransactionLifetimeSeconds * 1000,
+      requiresAuthTime,
     });
 
     return reply
@@ -153,6 +180,7 @@ export function registerAuthorizationRoute(
           ),
         );
     }
+    const authTime = Date.now();
 
     // Challenge MFA when the authenticated user has a registered TOTP factor.
     if (
@@ -196,6 +224,7 @@ export function registerAuthorizationRoute(
     const session = sessionStore.newSession({
       userId: user.userId,
       amr,
+      authTime,
     });
 
     return reply
@@ -208,6 +237,8 @@ export function registerAuthorizationRoute(
           user,
           // Password authentication, represented by RFC 8176's "pwd" AMR value.
           amr,
+          authTime,
+          pending.requiresAuthTime,
         ),
       );
   });
@@ -298,7 +329,7 @@ function validateAuthorizationRequest(
     requestedResource = input.resource;
   }
 
-  const successResponse: AuthorizationRequest = {
+  const authorizationRequest: AuthorizationRequest = {
     clientId: clientConfig.clientId,
     redirectUri: input.redirect_uri,
     responseType: input.response_type,
@@ -326,14 +357,34 @@ function validateAuthorizationRequest(
       };
     }
 
-    successResponse.codeChallenge = input.code_challenge;
-    successResponse.codeChallengeMethod =
+    authorizationRequest.codeChallenge = input.code_challenge;
+    authorizationRequest.codeChallengeMethod =
       input.code_challenge_method === "S256" ? "S256" : "plain";
+  }
+
+  // max_age
+  if (input.max_age != null) {
+    const maxAge = Number(input.max_age);
+    // We later store max age as ms, so don't allow values larger than can be stored as numbers in there.
+    const maxValue = Math.floor(Number.MAX_SAFE_INTEGER / 1000);
+    if (!/^\d+$/.test(input.max_age) || maxAge > maxValue) {
+      return {
+        ok: false,
+        authorizationError: {
+          statusCode: 400,
+          error: {
+            error: "invalid_request",
+            error_description: "Invalid max_age",
+          },
+        },
+      };
+    }
+    authorizationRequest.maxAge = maxAge;
   }
 
   return {
     ok: true,
-    authorizationRequest: successResponse,
+    authorizationRequest,
     clientConfig,
   };
 }
@@ -356,8 +407,11 @@ function renderLoginPage(
     sourceKey: Exclude<keyof AuthorizationRequest, "clientId">,
     targetKey: string,
   ) => {
-    if (authorizationRequest[sourceKey]) {
-      signupPathSearchParams.set(targetKey, authorizationRequest[sourceKey]);
+    if (authorizationRequest[sourceKey] != null) {
+      signupPathSearchParams.set(
+        targetKey,
+        String(authorizationRequest[sourceKey]),
+      );
     }
   };
   setIfExists("state", "state");
@@ -366,6 +420,7 @@ function renderLoginPage(
   setIfExists("codeChallenge", "code_challenge");
   setIfExists("codeChallengeMethod", "code_challenge_method");
   setIfExists("resource", "resource");
+  setIfExists("maxAge", "max_age");
   const signupPath = `/signup?${signupPathSearchParams.toString()}`;
   const loginActionUrl = new URL(authorizationEndpointPath, "http://localhost");
   loginActionUrl.searchParams.set("tx", transactionId);

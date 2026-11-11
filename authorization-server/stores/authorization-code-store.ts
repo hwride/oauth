@@ -1,10 +1,12 @@
-import type {
-  AuthenticationMethodReference,
-} from "../types/authentication-method-reference.ts";
+import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
 
 export type AuthorizationCodeRecord = {
   clientId: string;
   subject: string;
+  /** When the user authenticated. Unix time in ms */
+  authTime: number;
+  /** Whether auth_time is a required claim on the token response. */
+  requiresAuthTime: boolean;
   amr: AuthenticationMethodReference[];
   redirectUri: string;
   scope?: string;

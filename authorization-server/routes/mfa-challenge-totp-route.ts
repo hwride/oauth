@@ -110,7 +110,7 @@ export function registerMfaChallengeTotpRoute(
         );
     }
 
-    const { authorizationRequest, userId, amr } =
+    const { authorizationRequest, userId, amr, requiresAuthTime } =
       validationResult.pendingAuthorization;
     if (userId == null) {
       return reply
@@ -231,10 +231,12 @@ export function registerMfaChallengeTotpRoute(
     // We successfully authenticated with MFA here, create a session.
     // OIDC Authentication Method Reference values defined by RFC 8176:
     // https://datatracker.ietf.org/doc/html/rfc8176
+    const authTime = Date.now();
     const amrUpdated: AuthenticationMethodReference[] = [...amr, "otp", "mfa"];
     const session = sessionStore.newSession({
       userId: user.userId,
       amr: amrUpdated,
+      authTime,
     });
 
     return reply
@@ -246,6 +248,8 @@ export function registerMfaChallengeTotpRoute(
           authorizationRequest,
           user,
           amrUpdated,
+          authTime,
+          requiresAuthTime,
         ),
       );
   });

@@ -29,6 +29,7 @@ test("server context configures the default session store from server config", a
   const session = context.sessionStore.newSession({
     userId: "user-id",
     amr: ["pwd"],
+    authTime: 0,
   });
 
   assert.equal(
