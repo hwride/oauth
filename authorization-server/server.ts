@@ -47,7 +47,7 @@ export async function createServer(overrides: Partial<ServerContext> = {}) {
         },
       },
     },
-    disableRequestLogging: true,
+    disableRequestLogging: false,
   });
 
   logAuthorizationServerConfig(fastify, context.serverConfig);

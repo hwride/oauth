@@ -166,6 +166,131 @@ test("GET authorization endpoint always requires login for max_age=0", async fun
   assert.equal(authorizationCodeStore.isEmpty(), true);
 });
 
+test("GET authorization endpoint requires login for prompt=login with an active session", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
+  const session = sessionStore.newSession({
+    userId: janeUserId,
+    amr: ["pwd"],
+    authTime: Date.now(),
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      max_age: "60",
+      prompt: "login",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    undefined,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /<form method="post"/);
+  assert.match(
+    html,
+    /href="\/signup\?client_id=client-id-opaque&amp;response_type=code&amp;redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback&amp;max_age=60&amp;prompt=login"/,
+  );
+  assert.equal(authorizationCodeStore.isEmpty(), true);
+});
+
+test("GET authorization endpoint reuses an active session for prompt=none", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
+  const session = sessionStore.newSession({
+    userId: janeUserId,
+    amr: ["pwd"],
+    authTime: Date.now(),
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      prompt: "none",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    undefined,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 302);
+  const code = getRedirectUrl(response).searchParams.get("code");
+  assert.notEqual(code, null);
+  assert.equal(
+    authorizationCodeStore.loadAuthorizationCode(code).subject,
+    janeUserId,
+  );
+});
+
+test("GET authorization endpoint rejects prompt=none without an active session", async function () {
+  const response = await fetchAuthorizationLoginPage({
+    client_id: "client-id-opaque",
+    response_type: "code",
+    redirect_uri: "http://localhost:3000/callback",
+    prompt: "none",
+  });
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "login_required",
+    error_description: "Login is required",
+  });
+});
+
+test("GET authorization endpoint rejects prompt=none when max_age is stale", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
+  const session = sessionStore.newSession({
+    userId: janeUserId,
+    amr: ["pwd"],
+    authTime: Date.now() - 61_000,
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      max_age: "60",
+      prompt: "none",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    undefined,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "login_required",
+    error_description: "Login is required",
+  });
+  assert.equal(authorizationCodeStore.isEmpty(), true);
+});
+
+test("GET authorization endpoint rejects prompt=none with another prompt", async function () {
+  const response = await fetchAuthorizationLoginPage({
+    client_id: "client-id-opaque",
+    response_type: "code",
+    redirect_uri: "http://localhost:3000/callback",
+    prompt: "none login",
+  });
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "invalid_request",
+    error_description: "Invalid prompt",
+  });
+});
+
 test("GET authorization endpoint rejects an invalid max_age", async function () {
   const response = await fetchAuthorizationLoginPage({
     client_id: "client-id-opaque",

@@ -12,7 +12,12 @@ export type AuthorizationRequest = {
   resource?: SupportedResource;
   /** Maximum elapsed time in seconds since the End-User's last active authentication. */
   maxAge?: number;
+  /** Specifies whether the Authorization Server prompts the End-User for reauthentication and consent. */
+  prompt?: Prompt[];
 };
+
+export const prompts = ["none", "login"] as const;
+export type Prompt = (typeof prompts)[number];
 
 export type AuthorizationRequestError = {
   statusCode: number;

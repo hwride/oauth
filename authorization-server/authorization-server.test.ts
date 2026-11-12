@@ -242,6 +242,75 @@ test("authorization server reuses a session without requiring credentials", asyn
   }
 });
 
+test("authorization server requires credentials for prompt=login with an existing session", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
+    authorizationCodeStore,
+  });
+  const address = await fastify.listen({
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const initialLoginResponse = await authorizeClient(
+      address,
+      "client-id-opaque",
+    );
+    assert.equal(initialLoginResponse.status, 302);
+    const sessionCookie = initialLoginResponse.headers
+      .getSetCookie()[0]
+      .split(";", 1)[0];
+
+    const authorizationPath = new URL(defaultServerConfig.authorizationEndpoint)
+      .pathname;
+    const authorizationUrl = new URL(`${address}${authorizationPath}`);
+    authorizationUrl.search = new URLSearchParams({
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      prompt: "login",
+    }).toString();
+
+    const loginPageResponse = await fetch(authorizationUrl, {
+      headers: { cookie: sessionCookie },
+      redirect: "manual",
+    });
+    assert.equal(loginPageResponse.status, 200);
+    const loginAction = (await loginPageResponse.text()).match(
+      /<form method="post" action="([^"]+)"/,
+    )?.[1];
+    assert.ok(loginAction);
+
+    const reauthenticationResponse = await fetch(address + loginAction, {
+      headers: {
+        cookie: sessionCookie,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      method: "POST",
+      body: new URLSearchParams({
+        username: "jane",
+        password: "password",
+      }).toString(),
+      redirect: "manual",
+    });
+    assert.equal(reauthenticationResponse.status, 302);
+    assert.equal(reauthenticationResponse.headers.getSetCookie().length, 1);
+
+    const callbackUrl = getRedirectUrl(reauthenticationResponse);
+    assert.equal(callbackUrl.pathname, "/callback");
+    const code = callbackUrl.searchParams.get("code");
+    assert.ok(code);
+    assert.equal(
+      authorizationCodeStore.loadAuthorizationCode(code).subject,
+      janeUserId,
+    );
+  } finally {
+    await fastify.close();
+  }
+});
+
 test("max_age includes auth_time on initial and refreshed tokens", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
@@ -836,7 +905,7 @@ test("OIDC refresh token flow returns new access and ID tokens", async function 
   }
 });
 
-test("signup route creates a user who can then log in and receive a valid jwt access token", async function () {
+test("signup route preserves prompt and creates a user who can then log in and receive a valid jwt access token", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = createTokenStore();
   const userStore = createUserStore([]);
@@ -856,12 +925,18 @@ test("signup route creates a user who can then log in and receive a valid jwt ac
       client_id: "client-id-jwt",
       response_type: "code",
       redirect_uri: "http://localhost:3000/callback",
+      prompt: "login",
       username: "new-user",
       name: "New User",
       password: "new-password",
     });
 
     assert.equal(signupResponse.status, 302);
+    const signupLocation = signupResponse.headers.get("location");
+    assert.ok(signupLocation);
+    const signupRedirect = new URL(signupLocation, address);
+    assert.equal(signupRedirect.pathname, "/authorize");
+    assert.equal(signupRedirect.searchParams.get("prompt"), "login");
     const newUser = userStore.loadUserByUsername("new-user");
     assert.notEqual(newUser, undefined);
     assert.equal(isUuidV4(newUser.userId), true);
