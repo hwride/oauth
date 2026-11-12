@@ -6,9 +6,11 @@ import {
   type SupportedResource,
 } from "../config/resources-config.ts";
 import type { UserRecord, UserStore } from "../stores/user-store.ts";
-import type {
-  AuthorizationRequest,
-  AuthorizationRequestError,
+import {
+  type AuthorizationRequest,
+  type AuthorizationRequestError,
+  type Prompt,
+  prompts,
 } from "../types/authorization-request.ts";
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
@@ -31,6 +33,7 @@ type AuthorizeQueryParams = {
   code_challenge_method?: string;
   resource?: string;
   max_age?: string;
+  prompt?: string;
 };
 
 export function registerAuthorizationRoute(
@@ -64,7 +67,7 @@ export function registerAuthorizationRoute(
     }
 
     const { authorizationRequest } = validationResult;
-    const { maxAge } = authorizationRequest;
+    const { maxAge, prompt } = authorizationRequest;
     const requiresAuthTime = maxAge != null;
 
     // If there's an existing auth server session and it passes max_age requirements, we can skip authentication and
@@ -75,8 +78,22 @@ export function registerAuthorizationRoute(
       userStore,
     );
     if (sessionResult.ok === true) {
-      const issueCodeAndRedirectForActiveSession = () =>
-        reply.redirect(
+      let canUseSession = true;
+
+      // Force a fresh-auth here.
+      if (maxAge === 0 || prompt?.includes("login")) {
+        canUseSession = false;
+      }
+      // Otherwise if max_age was included, check if our session passes the freshness check.
+      else if (maxAge != null && maxAge > 0) {
+        const maxAgeMs = maxAge * 1000;
+        const sessionAge = Date.now() - sessionResult.session.authTime;
+        canUseSession = sessionAge <= maxAgeMs;
+      }
+
+      // Otherwise allow re-use of the session.
+      if (canUseSession) {
+        return reply.redirect(
           issueAuthorizationCodeAndRedirect(
             serverConfig,
             authorizationCodeStore,
@@ -87,23 +104,21 @@ export function registerAuthorizationRoute(
             requiresAuthTime,
           ),
         );
-
-      // If max_age was included, check if our session passes the freshness check.
-      if (maxAge != null && maxAge > 0) {
-        const maxAgeMs = maxAge * 1000;
-        const sessionAge = Date.now() - sessionResult.session.authTime;
-        if (sessionAge <= maxAgeMs) {
-          return issueCodeAndRedirectForActiveSession();
-        }
       }
-      // Otherwise allow re-use of the session, as long as max_age is not 0.
-      else if (maxAge !== 0) {
-        return issueCodeAndRedirectForActiveSession();
+    } else {
+      // If there is a problem with the session, proceed to normal login and clear the existing session if one was present.
+      // The loadSessionFromCookie util will have removed any invalid sessions if they exist.
+      if (sessionResult.sessionIdWasPresent) {
+        reply.header("Set-Cookie", getSessionCookieClear());
       }
     }
-    // If there is a problem with the session, proceed to normal login and clear the existing session if one was present.
-    else if (sessionResult.sessionIdWasPresent) {
-      reply.header("Set-Cookie", getSessionCookieClear());
+
+    // Should error if attempting to skip prompt without a session.
+    if (prompt?.includes("none")) {
+      return reply.code(400).send({
+        error: "login_required",
+        error_description: "Login is required",
+      } satisfies AuthorizationRequestError["error"]);
     }
 
     // Create a new pending authorization transaction.
@@ -382,6 +397,43 @@ function validateAuthorizationRequest(
     authorizationRequest.maxAge = maxAge;
   }
 
+  // prompt
+  if (input.prompt != null) {
+    const promptError = {
+      ok: false,
+      authorizationError: {
+        statusCode: 400,
+        error: {
+          error: "invalid_request",
+          error_description: "Invalid prompt",
+        },
+      },
+    } as const;
+
+    if (typeof input.prompt !== "string") {
+      return promptError;
+    }
+
+    // Check only valid prompts are given.
+    const validPrompts: Set<string> = new Set(prompts);
+    const promptParts = input.prompt.split(" ");
+    let hasNone = false;
+    const hasValidPrompts = promptParts.every((prompt) => {
+      if (prompt === "none") hasNone = true;
+      return validPrompts.has(prompt);
+    });
+    if (!hasValidPrompts) {
+      return promptError;
+    }
+
+    // Check if none is provided, no other prompts are used.
+    if (hasNone && promptParts.length > 1) {
+      return promptError;
+    }
+
+    authorizationRequest.prompt = promptParts as Prompt[];
+  }
+
   return {
     ok: true,
     authorizationRequest,
@@ -421,6 +473,9 @@ function renderLoginPage(
   setIfExists("codeChallengeMethod", "code_challenge_method");
   setIfExists("resource", "resource");
   setIfExists("maxAge", "max_age");
+  if (authorizationRequest.prompt != null) {
+    signupPathSearchParams.set("prompt", authorizationRequest.prompt.join(" "));
+  }
   const signupPath = `/signup?${signupPathSearchParams.toString()}`;
   const loginActionUrl = new URL(authorizationEndpointPath, "http://localhost");
   loginActionUrl.searchParams.set("tx", transactionId);

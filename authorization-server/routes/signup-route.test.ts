@@ -22,6 +22,7 @@ test("GET signup route renders a signup form that preserves the authorization re
     code_challenge: "challenge-value-123",
     code_challenge_method: "S256",
     max_age: "60",
+    prompt: "login",
   });
 
   assert.equal(response.status, 200);
@@ -48,10 +49,11 @@ test("GET signup route renders a signup form that preserves the authorization re
   assert.match(html, /name="code_challenge" value="challenge-value-123"/);
   assert.match(html, /name="code_challenge_method" value="S256"/);
   assert.match(html, /name="max_age" value="60"/);
+  assert.match(html, /name="prompt" value="login"/);
   assert.match(html, /name="name" autocomplete="name" value="" required/);
   assert.match(
     html,
-    /href="\/authorize\?client_id=client-id-opaque&amp;response_type=code&amp;redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback&amp;state=state-value-123&amp;scope=openid\+profile&amp;resource=https%3A%2F%2Forders-api.example.test&amp;nonce=nonce-value-123&amp;code_challenge=challenge-value-123&amp;code_challenge_method=S256&amp;max_age=60"/,
+    /href="\/authorize\?client_id=client-id-opaque&amp;response_type=code&amp;redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback&amp;state=state-value-123&amp;scope=openid\+profile&amp;resource=https%3A%2F%2Forders-api.example.test&amp;nonce=nonce-value-123&amp;code_challenge=challenge-value-123&amp;code_challenge_method=S256&amp;max_age=60&amp;prompt=login"/,
   );
 });
 
@@ -124,6 +126,7 @@ test("POST signup route creates a user and redirects back to the authorization e
       code_challenge: "challenge-value-123",
       code_challenge_method: "S256",
       max_age: "60",
+      prompt: "login",
       username: "new-user",
       name: "New User",
       password: "new-password",
@@ -139,7 +142,7 @@ test("POST signup route creates a user and redirects back to the authorization e
   assert.equal(newUser.name, "New User");
   assert.equal(
     response.headers.get("location"),
-    "/authorize?client_id=client-id-opaque&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback&state=state-value-123&scope=openid+profile&resource=https%3A%2F%2Forders-api.example.test&nonce=nonce-value-123&code_challenge=challenge-value-123&code_challenge_method=S256&max_age=60",
+    "/authorize?client_id=client-id-opaque&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback&state=state-value-123&scope=openid+profile&resource=https%3A%2F%2Forders-api.example.test&nonce=nonce-value-123&code_challenge=challenge-value-123&code_challenge_method=S256&max_age=60&prompt=login",
   );
 });
 
