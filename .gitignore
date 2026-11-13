@@ -3,3 +3,4 @@
 node_modules
 conformance/*.log
 conformance/mongo
+conformance/nginx-auth-server/certs/
