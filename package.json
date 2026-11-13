@@ -10,7 +10,9 @@
     "types": "tsc --noEmit",
     "prettier:write": "prettier --write .",
     "conformance:up": "docker compose -f conformance/docker-compose-prebuilt.yml -f conformance/proxy-compose.yml up --build",
-    "conformance:down": "docker compose -f conformance/docker-compose-prebuilt.yml -f conformance/proxy-compose.yml down"
+    "conformance:up:extra-ca": "docker compose -f conformance/docker-compose-prebuilt.yml -f conformance/proxy-compose.yml -f conformance/proxy-compose-extra-ca.yml up --build",
+    "conformance:down": "docker compose -f conformance/docker-compose-prebuilt.yml -f conformance/proxy-compose.yml down",
+    "conformance:down:extra-ca": "docker compose -f conformance/docker-compose-prebuilt.yml -f conformance/proxy-compose.yml -f conformance/proxy-compose-extra-ca.yml down"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

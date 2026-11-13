@@ -4,6 +4,7 @@
 
 1. Start Docker Desktop. From the repository root, run these in two terminals:
 1. Boot the conformance suite and our auth server HTTPS proxy: `npm run conformance:up`.
+   1. Or if running behind a proxy that requires an extra CA, run `EXTRA_CA_FILE=/path/to/ca.cer npm run conformance:up:extra-ca`. `EXTRA_CA_FILE` must point to a single PEM-formatted certificate, not a bundle containing multiple certificates.
 1. Boot the server with `npm run dev:conformance`. This loads the HTTPS issuer and listen address from `conformance.env`.
 1. The conformance suite should then be available at <https://localhost.emobix.co.uk:8443>.
 
