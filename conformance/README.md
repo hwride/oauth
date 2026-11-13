@@ -1,10 +1,27 @@
 # Local OpenID conformance testing
 
+## Prerequisites
+
+Install Docker and `mkcert` before starting the conformance suite.
+
+On macOS:
+
+```shell
+brew install mkcert
+```
+
+On Windows, install it with Chocolatey or Scoop:
+
+```powershell
+choco install mkcert
+```
+
+The first `npm run conformance:up` runs `mkcert -install`, creates a locally trusted certificate for the development hostnames, and mounts it into both nginx HTTPS proxies. Generated certificates are stored locally and ignored by Git.
+
 ## Start
 
 1. Start Docker Desktop. From the repository root, run these in two terminals:
 1. Boot the conformance suite and our auth server HTTPS proxy: `npm run conformance:up`.
-   1. Or if running behind a proxy that requires an extra CA, run `EXTRA_CA_FILE=/path/to/ca.cer npm run conformance:up:extra-ca`. `EXTRA_CA_FILE` must point to a single PEM-formatted certificate, not a bundle containing multiple certificates.
 1. Boot the server with `npm run dev:conformance`. This loads the HTTPS issuer and listen address from `conformance.env`.
 1. The conformance suite should then be available at <https://localhost.emobix.co.uk:8443>.
 
@@ -24,7 +41,7 @@ Login with `jane`/`password` if you don't want MFA.
 ### Configuring test plans
 #### OpenID Connect Core > Config
 1. `server.discoveryUrl`: `https://host.docker.internal:4443/.well-known/openid-configuration`.
-   The proxy uses a local self-signed certificate, so accept the certificate warning when opening the URL in a browser.
+   The proxy uses a locally trusted `mkcert` certificate. The same certificate is used by the conformance suite at `https://localhost.emobix.co.uk:8443`.
 
 #### OpenID Connect Core > Basic
 

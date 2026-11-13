@@ -1,9 +1,0 @@
-services:
-  nginx-auth-server:
-    build:
-      secrets:
-        - extra_ca
-
-secrets:
-  extra_ca:
-    file: ${EXTRA_CA_FILE:?Set EXTRA_CA_FILE to the path of your extra CA PEM file with a single cert inside}
