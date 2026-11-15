@@ -14,7 +14,10 @@ export function registerOpenIdConfigurationRoute(
       issuer: serverConfig.issuer,
       authorization_endpoint: serverConfig.authorizationEndpoint,
       token_endpoint: serverConfig.tokenEndpoint,
-      token_endpoint_auth_methods_supported: ["client_secret_basic"],
+      token_endpoint_auth_methods_supported: [
+        "client_secret_basic",
+        "client_secret_post",
+      ],
       jwks_uri: serverConfig.jwksUri,
       userinfo_endpoint: serverConfig.userInfoUri,
       response_types_supported: ["code"],

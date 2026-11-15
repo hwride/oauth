@@ -12,8 +12,11 @@ import type { AuthenticationMethodReference } from "../types/authentication-meth
 
 type TokenRequestBody = {
   grant_type?: string;
-  /** Only required if not using client authentication. */
+  /**
+   * Only required if using client_secret_post authentication or no authentication.
+   */
   client_id?: string;
+  client_secret?: string;
   // Authorization code grant.
   code?: string;
   redirect_uri?: string;
@@ -67,6 +70,7 @@ export function registerTokenRoute(
 
     // OAuth 2.0, Client Authentication
     // https://datatracker.ietf.org/doc/html/rfc6749#section-2.3
+    // client_secret_basic authentication
     if (request.headers.authorization != null) {
       const clientCredentials = parseBasicAuthorizationHeader(
         request.headers.authorization,
@@ -110,28 +114,39 @@ export function registerTokenRoute(
         });
       }
     }
-    // No auth header, potentially a public client.
+    // No auth header, could be a public client, client_secret_post auth, or invalid.
     else {
-      const configuredClient = clientsConfig.find(function (client) {
+      clientConfig = clientsConfig.find(function (client) {
         return client.clientId === request.body.client_id;
       });
-      if (
-        configuredClient == null ||
-        configuredClient.clientAuthMethod !== "none"
-      ) {
-        const invalidClientResponse = reply.code(401);
-        if (!request.body.client_id) {
-          invalidClientResponse.header(
-            "www-authenticate",
-            'Basic realm="token"',
-          );
+
+      if (clientConfig == null) {
+        return reply.code(401).send({
+          error: "invalid_client",
+          error_description: "Client not found",
+        });
+      } else if (clientConfig.clientAuthMethod === "client_secret_basic") {
+        return reply
+          .code(401)
+          .header("www-authenticate", 'Basic realm="token"')
+          .send({
+            error: "invalid_client",
+            error_description: "Client requires Basic authentication",
+          });
+      } else if (clientConfig.clientAuthMethod === "client_secret_post") {
+        if (clientConfig.clientSecret !== request.body.client_secret) {
+          return reply.code(401).send({
+            error: "invalid_client",
+            error_description: "client_secret_post authentication failed",
+          });
         }
-        return invalidClientResponse.send({
+      }
+      // We never expect to get there.
+      else if (clientConfig.clientAuthMethod !== "none") {
+        return reply.code(401).send({
           error: "invalid_client",
         });
       }
-
-      clientConfig = configuredClient;
     }
 
     // Switch on grant type.

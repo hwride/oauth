@@ -61,9 +61,9 @@ test("POST token endpoint rejects missing client auth", async function () {
   });
 
   assert.equal(response.status, 401);
-  assert.equal(response.headers.get("www-authenticate"), 'Basic realm="token"');
   assert.deepEqual(await response.json(), {
     error: "invalid_client",
+    error_description: "Client not found",
   });
 });
 
@@ -113,6 +113,46 @@ test("POST token endpoint rejects body client_id authentication for a confidenti
   assert.equal(response.status, 401);
   assert.deepEqual(await response.json(), {
     error: "invalid_client",
+    error_description: "Client requires Basic authentication",
+  });
+});
+
+test("POST token endpoint accepts client_secret_post authentication", async function () {
+  const response = await fetchTokenEndpoint(
+    {
+      grant_type: "authorization_code",
+      client_id: "client-id-jwt-post-auth",
+      client_secret: "jwt-post-auth-client-secret",
+      code: "test-auth-code",
+      redirect_uri: "http://localhost:3000/callback",
+    },
+    defaultServerConfig,
+    createAuthorizationCodeStoreWithCodeForClient(
+      "client-id-jwt-post-auth",
+    ),
+  );
+
+  assert.equal(response.status, 200);
+});
+
+test("POST token endpoint rejects invalid client_secret_post authentication", async function () {
+  const response = await fetchTokenEndpoint(
+    {
+      grant_type: "authorization_code",
+      client_id: "client-id-jwt-post-auth",
+      client_secret: "wrong-secret",
+      code: "test-auth-code",
+    },
+    defaultServerConfig,
+    createAuthorizationCodeStoreWithCodeForClient(
+      "client-id-jwt-post-auth",
+    ),
+  );
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), {
+    error: "invalid_client",
+    error_description: "client_secret_post authentication failed",
   });
 });
 
@@ -938,6 +978,35 @@ test("POST token endpoint rejects refresh token grant missing refresh_token", as
     error: "invalid_request",
     error_description: "Missing refresh_token",
   });
+});
+
+test("POST token endpoint accepts client_secret_post authentication for refresh tokens", async function () {
+  const refreshTokenStore = createRefreshTokenStore();
+  const refreshToken = refreshTokenStore.generateNew(
+    {
+      clientId: "client-id-jwt-post-auth",
+      subject: "test-user-id",
+      authTime: 0,
+      requiresAuthTime: false,
+    },
+    172800,
+  );
+
+  const response = await fetchTokenEndpoint(
+    {
+      grant_type: "refresh_token",
+      client_id: "client-id-jwt-post-auth",
+      client_secret: "jwt-post-auth-client-secret",
+      refresh_token: refreshToken,
+    },
+    defaultServerConfig,
+    createAuthorizationCodeStore(),
+    undefined,
+    createTokenStore(),
+    refreshTokenStore,
+  );
+
+  assert.equal(response.status, 200);
 });
 
 test("POST token endpoint rejects unknown refresh token", async function () {
