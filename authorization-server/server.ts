@@ -55,6 +55,7 @@ export async function createServer(overrides: Partial<ServerContext> = {}) {
     request,
     reply,
   ) {
+    // Keep expected client errors quiet while surfacing server-side failures.
     if (error.statusCode == null || error.statusCode >= 500) {
       request.log.error({ err: error }, "Unhandled request error");
     }
