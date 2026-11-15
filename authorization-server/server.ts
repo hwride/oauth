@@ -50,6 +50,18 @@ export async function createServer(overrides: Partial<ServerContext> = {}) {
     disableRequestLogging: true,
   });
 
+  fastify.setErrorHandler(function (
+    error: Error & { statusCode?: number },
+    request,
+    reply,
+  ) {
+    // Keep expected client errors quiet while surfacing server-side failures.
+    if (error.statusCode == null || error.statusCode >= 500) {
+      request.log.error({ err: error }, "Unhandled request error");
+    }
+    return this.errorHandler(error, request, reply);
+  });
+
   logAuthorizationServerConfig(fastify, context.serverConfig);
 
   fastify.register(formbody);
@@ -105,3 +117,4 @@ function logAuthorizationServerConfig(
 function getAuthorizationServerPort() {
   return Number(process.env.AUTH_SERVER_PORT ?? defaultAuthorizationServerPort);
 }
+
