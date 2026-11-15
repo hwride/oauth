@@ -11,15 +11,31 @@
         box-sizing: border-box;
       }
 
+      .callback-failed {
+        color: #b00020;
+      }
+
     </style>
   </head>
   <body>
-    <h1><%= callbackTitle %></h1>
     <a href="/">Back to home</a>
+    <h1 class="<%= callbackTitle === 'Callback failed' ? 'callback-failed' : '' %>">
+      <%= callbackTitle %>
+    </h1>
 
     <h2>Response</h2>
     <% if (errorMessage) { %>
     <p><%= errorMessage %></p>
+    <% if (oauthError) { %>
+    <dl>
+      <dt>error</dt>
+      <dd><%= oauthError %></dd>
+      <% if (oauthErrorDescription) { %>
+      <dt>error_description</dt>
+      <dd><%= oauthErrorDescription %></dd>
+      <% } %>
+    </dl>
+    <% } %>
     <% if (tokenResponseJson) { %>
     <h3>Error response body</h3>
     <pre><%= tokenResponseJson %></pre>

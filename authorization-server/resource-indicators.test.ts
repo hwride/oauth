@@ -256,14 +256,19 @@ test("authorization endpoint rejects unknown resource indicators", async functio
 
   try {
     const response = await fetchAuthorizationRequest(address, {
+      state: "state-value-123",
       resource: "https://payments-api.example.test",
     });
 
-    assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), {
-      error: "invalid_target",
-      error_description: "Unsupported resource indicator",
-    });
+    assert.equal(response.status, 302);
+    assert.deepEqual(
+      Object.fromEntries(getRedirectUrl(response).searchParams),
+      {
+        error: "invalid_target",
+        error_description: "Unsupported resource indicator",
+        state: "state-value-123",
+      },
+    );
     assert.equal(authorizationCodeStore.isEmpty(), true);
   } finally {
     await fastify.close();

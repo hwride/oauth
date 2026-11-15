@@ -5,12 +5,16 @@ import type { JWTPayload } from "jose";
 
 type CallbackQuery = {
   code?: string;
+  error?: string;
+  error_description?: string;
   state?: string;
 };
 
 type CallbackViewProps = {
   callbackTitle: "Callback failed" | "Callback success";
   errorMessage: string | undefined;
+  oauthError: string | undefined;
+  oauthErrorDescription: string | undefined;
   tokenResponseJson: string | undefined;
   accessTokenJson: string | undefined;
   idTokenJson: string | undefined;
@@ -41,6 +45,8 @@ export function registerCallbackRoute(
       return renderCallbackFailure(reply, 400, {
         ...callbackViewProps,
         errorMessage: validationResult.errorMessage,
+        oauthError: validationResult.oauthError,
+        oauthErrorDescription: validationResult.oauthErrorDescription,
       });
     }
 
@@ -75,6 +81,8 @@ function getDefaultCallbackViewProps(): CallbackViewProps {
   return {
     callbackTitle: "Callback failed",
     errorMessage: undefined,
+    oauthError: undefined,
+    oauthErrorDescription: undefined,
     tokenResponseJson: undefined,
     accessTokenJson: undefined,
     idTokenJson: undefined,
@@ -84,14 +92,30 @@ function getDefaultCallbackViewProps(): CallbackViewProps {
 function validateCallbackAuthorizationResponse(
   query: CallbackQuery,
   authFlowContext: AuthFlowContext,
-): { ok: true; code: string } | { ok: false; errorMessage: string } {
-  if (!query.code) {
-    return { ok: false, errorMessage: "Missing code" };
-  }
-
+):
+  | { ok: true; code: string }
+  | {
+      ok: false;
+      errorMessage: string;
+      oauthError?: string;
+      oauthErrorDescription?: string;
+    } {
   const expectedState = authFlowContext.state;
   if (expectedState && (!query.state || query.state !== expectedState)) {
     return { ok: false, errorMessage: "Invalid state" };
+  }
+
+  if (query.error) {
+    return {
+      ok: false,
+      errorMessage: "OAuth error",
+      oauthError: query.error,
+      oauthErrorDescription: query.error_description,
+    };
+  }
+
+  if (!query.code) {
+    return { ok: false, errorMessage: "Missing code" };
   }
 
   return { ok: true, code: query.code };
