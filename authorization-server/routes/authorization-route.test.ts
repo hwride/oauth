@@ -235,13 +235,15 @@ test("GET authorization endpoint rejects prompt=none without an active session",
     client_id: "client-id-opaque",
     response_type: "code",
     redirect_uri: "http://localhost:3000/callback",
+    state: "state-value-123",
     prompt: "none",
   });
 
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
+  assert.equal(response.status, 302);
+  assert.deepEqual(Object.fromEntries(getRedirectUrl(response).searchParams), {
     error: "login_required",
     error_description: "Login is required",
+    state: "state-value-123",
   });
 });
 
@@ -259,6 +261,7 @@ test("GET authorization endpoint rejects prompt=none when max_age is stale", asy
       response_type: "code",
       redirect_uri: "http://localhost:3000/callback",
       max_age: "60",
+      state: "state-value-123",
       prompt: "none",
     },
     defaultServerConfig,
@@ -268,10 +271,11 @@ test("GET authorization endpoint rejects prompt=none when max_age is stale", asy
     `__Host-Http-session-id=${session.sessionId}`,
   );
 
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
+  assert.equal(response.status, 302);
+  assert.deepEqual(Object.fromEntries(getRedirectUrl(response).searchParams), {
     error: "login_required",
     error_description: "Login is required",
+    state: "state-value-123",
   });
   assert.equal(authorizationCodeStore.isEmpty(), true);
 });
@@ -281,13 +285,15 @@ test("GET authorization endpoint rejects prompt=none with another prompt", async
     client_id: "client-id-opaque",
     response_type: "code",
     redirect_uri: "http://localhost:3000/callback",
+    state: "state-value-123",
     prompt: "none login",
   });
 
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
+  assert.equal(response.status, 302);
+  assert.deepEqual(Object.fromEntries(getRedirectUrl(response).searchParams), {
     error: "invalid_request",
     error_description: "Invalid prompt",
+    state: "state-value-123",
   });
 });
 
@@ -297,12 +303,14 @@ test("GET authorization endpoint rejects an invalid max_age", async function () 
     response_type: "code",
     redirect_uri: "http://localhost:3000/callback",
     max_age: "not-a-number",
+    state: "state-value-123",
   });
 
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
+  assert.equal(response.status, 302);
+  assert.deepEqual(Object.fromEntries(getRedirectUrl(response).searchParams), {
     error: "invalid_request",
     error_description: "Invalid max_age",
+    state: "state-value-123",
   });
 });
 
@@ -677,6 +685,7 @@ test("GET authorization endpoint rejects requests missing redirect_uri", async f
   });
 
   assert.equal(response.status, 400);
+  assert.equal(response.headers.get("location"), null);
   assert.deepEqual(await response.json(), {
     error: "invalid_request",
     error_description: "Missing redirect_uri",
@@ -691,6 +700,7 @@ test("GET authorization endpoint rejects invalid client_id", async function () {
   });
 
   assert.equal(response.status, 400);
+  assert.equal(response.headers.get("location"), null);
   assert.deepEqual(await response.json(), {
     error: "invalid_request",
     error_description: "Invalid client_id",
@@ -705,6 +715,7 @@ test("GET authorization endpoint rejects invalid redirect_uri", async function (
   });
 
   assert.equal(response.status, 400);
+  assert.equal(response.headers.get("location"), null);
   assert.deepEqual(await response.json(), {
     error: "invalid_request",
     error_description: "Invalid redirect_uri",
@@ -716,11 +727,18 @@ test("GET authorization endpoint rejects unsupported response_type", async funct
     client_id: "client-id-opaque",
     response_type: "token",
     redirect_uri: "http://localhost:3000/callback",
+    state: "state-value-123",
+    scope: "openid profile",
   });
 
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
+  assert.equal(response.status, 302);
+  const redirectUrl = getRedirectUrl(response);
+  assert.equal(redirectUrl.origin, "http://localhost:3000");
+  assert.equal(redirectUrl.pathname, "/callback");
+  assert.deepEqual(Object.fromEntries(redirectUrl.searchParams), {
     error: "unsupported_response_type",
+    error_description: "Unsupported response_type value",
+    state: "state-value-123",
   });
 });
 
@@ -731,12 +749,14 @@ test("GET authorization endpoint rejects unsupported code_challenge_method", asy
     redirect_uri: "http://localhost:3000/callback",
     code_challenge: "test-challenge",
     code_challenge_method: "S512",
+    state: "state-value-123",
   });
 
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
+  assert.equal(response.status, 302);
+  assert.deepEqual(Object.fromEntries(getRedirectUrl(response).searchParams), {
     error: "invalid_request",
     error_description: "Unsupported code_challenge_method",
+    state: "state-value-123",
   });
 });
 
@@ -848,16 +868,18 @@ test("POST authorization endpoint rejects unsupported resource indicators", asyn
       client_id: "client-id-opaque",
       response_type: "code",
       redirect_uri: "http://localhost:3000/callback",
+      state: "state-value-123",
       resource: "https://payments-api.example.test",
     },
     defaultServerConfig,
     authorizationCodeStore,
   );
 
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
+  assert.equal(response.status, 302);
+  assert.deepEqual(Object.fromEntries(getRedirectUrl(response).searchParams), {
     error: "invalid_target",
     error_description: "Unsupported resource indicator",
+    state: "state-value-123",
   });
   assert.equal(authorizationCodeStore.isEmpty(), true);
 });
@@ -869,16 +891,18 @@ test("POST authorization endpoint rejects resource indicators that are not absol
       client_id: "client-id-opaque",
       response_type: "code",
       redirect_uri: "http://localhost:3000/callback",
+      state: "state-value-123",
       resource: "orders-api",
     },
     defaultServerConfig,
     authorizationCodeStore,
   );
 
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
+  assert.equal(response.status, 302);
+  assert.deepEqual(Object.fromEntries(getRedirectUrl(response).searchParams), {
     error: "invalid_target",
     error_description: "Unsupported resource indicator",
+    state: "state-value-123",
   });
   assert.equal(authorizationCodeStore.isEmpty(), true);
 });
@@ -890,16 +914,18 @@ test("POST authorization endpoint rejects resource indicators with fragments", a
       client_id: "client-id-opaque",
       response_type: "code",
       redirect_uri: "http://localhost:3000/callback",
+      state: "state-value-123",
       resource: `${ordersApiResource}#orders`,
     },
     defaultServerConfig,
     authorizationCodeStore,
   );
 
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
+  assert.equal(response.status, 302);
+  assert.deepEqual(Object.fromEntries(getRedirectUrl(response).searchParams), {
     error: "invalid_target",
     error_description: "Unsupported resource indicator",
+    state: "state-value-123",
   });
   assert.equal(authorizationCodeStore.isEmpty(), true);
 });

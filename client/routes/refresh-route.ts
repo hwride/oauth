@@ -6,6 +6,8 @@ import type { JWTPayload } from "jose";
 type RefreshViewProps = {
   callbackTitle: "Refresh failed" | "Refresh success";
   errorMessage: string | undefined;
+  oauthError: string | undefined;
+  oauthErrorDescription: string | undefined;
   tokenResponseJson: string | undefined;
   accessTokenJson: string | undefined;
   idTokenJson: string | undefined;
@@ -60,6 +62,8 @@ function getDefaultRefreshViewProps(): RefreshViewProps {
   return {
     callbackTitle: "Refresh failed",
     errorMessage: undefined,
+    oauthError: undefined,
+    oauthErrorDescription: undefined,
     tokenResponseJson: undefined,
     accessTokenJson: undefined,
     idTokenJson: undefined,
