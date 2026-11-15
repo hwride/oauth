@@ -33,6 +33,7 @@ type AuthorizeQueryParams = {
   resource?: string;
   max_age?: string;
   prompt?: string;
+  request?: string;
 };
 
 export function registerAuthorizationRoute(
@@ -345,6 +346,13 @@ function validateAuthorizationRequest(
     });
     return { ok: false } as const;
   };
+
+  if (query.request != null) {
+    return sendRedirectErrorResponseHelper({
+      error: "request_not_supported",
+      error_description: "The request parameter is not supported",
+    });
+  }
 
   // Check for supported grant type.
   if (query.response_type !== "code") {

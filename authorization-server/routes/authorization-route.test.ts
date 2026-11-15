@@ -742,6 +742,23 @@ test("GET authorization endpoint rejects unsupported response_type", async funct
   });
 });
 
+test("GET authorization endpoint rejects the unsupported request parameter", async function () {
+  const response = await fetchAuthorizationLoginPage({
+    client_id: "client-id-opaque",
+    response_type: "code",
+    redirect_uri: "http://localhost:3000/callback",
+    request: "signed-request-value",
+    state: "state-value-123",
+  });
+
+  assert.equal(response.status, 302);
+  assert.deepEqual(Object.fromEntries(getRedirectUrl(response).searchParams), {
+    error: "request_not_supported",
+    error_description: "The request parameter is not supported",
+    state: "state-value-123",
+  });
+});
+
 test("GET authorization endpoint rejects unsupported code_challenge_method", async function () {
   const response = await fetchAuthorizationLoginPage({
     client_id: "client-id-opaque",
