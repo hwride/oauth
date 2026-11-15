@@ -12,6 +12,7 @@ type ClientConfigAuth =
       /**
        * How the client will authenticate with the authorization server.
        * - client_secret_basic: using Basic authentication. For confidential clients.
+       * - client_secret_post: send credentials in the request body. For confidential clients.
        * - none: no authentication required. For public clients.
        */
       clientAuthMethod: "client_secret_basic";
@@ -21,6 +22,17 @@ type ClientConfigAuth =
       /**
        * How the client will authenticate with the authorization server.
        * - client_secret_basic: using Basic authentication. For confidential clients.
+       * - client_secret_post: send credentials in the request body. For confidential clients.
+       * - none: no authentication required. For public clients.
+       */
+      clientAuthMethod: "client_secret_post";
+      clientSecret: string;
+    }
+  | {
+      /**
+       * How the client will authenticate with the authorization server.
+       * - client_secret_basic: using Basic authentication. For confidential clients.
+       * - client_secret_post: send credentials in the request body. For confidential clients.
        * - none: no authentication required. For public clients.
        */
       clientAuthMethod: "none";
@@ -65,6 +77,21 @@ export const clientsConfig: ClientConfig[] = [
     refreshTokenLifetimeSeconds,
   },
   {
+    clientId: "client-id-jwt-post-auth",
+    clientAuthMethod: "client_secret_post",
+    clientSecret: "jwt-post-auth-client-secret",
+    redirectUris: [
+      new URL(
+        "/callback",
+        process.env.CLIENT_JWT_BASE ?? defaultClientBase,
+      ).toString(),
+    ],
+    accessTokenType: "jwt",
+    accessTokenLifetimeSeconds,
+    idTokenLifetimeSeconds,
+    refreshTokenLifetimeSeconds,
+  },
+  {
     clientId: "client-id-public",
     clientAuthMethod: "none",
     redirectUris: [
@@ -93,6 +120,16 @@ export const clientsConfig: ClientConfig[] = [
     clientId: "conformance-client-2",
     clientAuthMethod: "client_secret_basic",
     clientSecret: "conformance-secret-2",
+    redirectUris: [conformanceRedirectUri],
+    accessTokenType: "jwt",
+    accessTokenLifetimeSeconds,
+    idTokenLifetimeSeconds,
+    refreshTokenLifetimeSeconds,
+  },
+  {
+    clientId: "conformance-client-post-auth",
+    clientAuthMethod: "client_secret_post",
+    clientSecret: "conformance-secret-3",
     redirectUris: [conformanceRedirectUri],
     accessTokenType: "jwt",
     accessTokenLifetimeSeconds,

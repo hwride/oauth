@@ -1,5 +1,9 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import type { AuthFlowContext } from "./auth-flow-context.ts";
+import {
+  parseClientAuthMethod,
+  type AuthFlowContext,
+  type ClientAuthMethod,
+} from "./auth-flow-context.ts";
 import { verifyJwtWithJose } from "../utils/jwt-verifier.ts";
 import type { JWTPayload } from "jose";
 
@@ -36,7 +40,7 @@ export function registerRefreshRoute(
       authFlowContext,
       clientId: process.env.CLIENT_ID,
       clientSecret: process.env.CLIENT_SECRET,
-      clientAuthMethod: process.env.CLIENT_AUTH_METHOD,
+      clientAuthMethod: parseClientAuthMethod(process.env.CLIENT_AUTH_METHOD),
       log: fastify.log,
     });
 
@@ -75,7 +79,7 @@ async function makeRefreshTokenRequest(args: {
   authFlowContext: AuthFlowContext;
   clientId: string | undefined;
   clientSecret: string | undefined;
-  clientAuthMethod: string | undefined;
+  clientAuthMethod: ClientAuthMethod;
   log: FastifyInstance["log"];
 }): Promise<Response> {
   const tokenUrl = new URL(args.authFlowContext.tokenEndpoint);
@@ -93,7 +97,12 @@ async function makeRefreshTokenRequest(args: {
   if (args.clientAuthMethod === "none") {
     tokenRequestBody.set("client_id", args.clientId ?? "");
   }
-  // Confidential clients can authenticate with Basic auth. Default behaviour.
+  // Confidential clients can authenticate by sending credentials in the body.
+  else if (args.clientAuthMethod === "client_secret_post") {
+    tokenRequestBody.set("client_id", args.clientId ?? "");
+    tokenRequestBody.set("client_secret", args.clientSecret ?? "");
+  }
+  // Confidential clients use Basic authentication by default.
   else {
     const basicAuth = Buffer.from(
       `${args.clientId}:${args.clientSecret}`,

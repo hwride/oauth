@@ -38,6 +38,8 @@ test("callback URIs default to client port 3000", async () => {
     ["http://localhost:3000/callback"],
     ["http://localhost:3000/callback"],
     ["http://localhost:3000/callback"],
+    ["http://localhost:3000/callback"],
+    [conformanceRedirectUri],
     [conformanceRedirectUri],
     [conformanceRedirectUri],
   ]);
@@ -48,6 +50,8 @@ test("local app callback URIs follow a custom CLIENT_PORT", async () => {
     ["http://localhost:3100/callback"],
     ["http://localhost:3100/callback"],
     ["http://localhost:3100/callback"],
+    ["http://localhost:3100/callback"],
+    [conformanceRedirectUri],
     [conformanceRedirectUri],
     [conformanceRedirectUri],
   ]);
@@ -64,7 +68,9 @@ test("explicit client bases take precedence over CLIENT_PORT", async () => {
     [
       ["https://opaque.example.test:3101/callback"],
       ["https://jwt.example.test:3102/callback"],
+      ["https://jwt.example.test:3102/callback"],
       ["https://public.example.test:3103/callback"],
+      [conformanceRedirectUri],
       [conformanceRedirectUri],
       [conformanceRedirectUri],
     ],
