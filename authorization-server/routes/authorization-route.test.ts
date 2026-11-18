@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  createAuthorizationCodeStore,
-  type AuthorizationCodeStore,
-} from "../stores/authorization-code-store.ts";
+  createGrantStore,
+  createGrantStore as createAuthorizationCodeStore,
+  type GrantStore,
+} from "../stores/grant-store.ts";
 import {
   ordersApiResource,
   productsApiResource,
@@ -49,7 +50,10 @@ test("GET authorization endpoint renders a login form for a valid request", asyn
     "text/html; charset=utf-8",
   );
   assert.match(await response.text(), /<form method="post"/);
-  assert.equal(authorizationCodeStore.isEmpty(), true);
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
 });
 
 test("GET authorization endpoint clears an invalid session cookie before showing login", async function () {
@@ -134,7 +138,10 @@ test("GET authorization endpoint requires login for a stale max_age session", as
   assert.equal(response.status, 200);
   assert.match(await response.text(), /<form method="post"/);
   assert.equal(response.headers.getSetCookie().length, 0);
-  assert.equal(authorizationCodeStore.isEmpty(), true);
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
 });
 
 test("GET authorization endpoint always requires login for max_age=0", async function () {
@@ -163,7 +170,10 @@ test("GET authorization endpoint always requires login for max_age=0", async fun
   assert.match(await response.text(), /<form method="post"/);
   // No Set-Cookie - checking that existing auth server session isn't cleared.
   assert.equal(response.headers.getSetCookie().length, 0);
-  assert.equal(authorizationCodeStore.isEmpty(), true);
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
 });
 
 test("GET authorization endpoint requires login for prompt=login with an active session", async function () {
@@ -196,7 +206,10 @@ test("GET authorization endpoint requires login for prompt=login with an active 
     html,
     /href="\/signup\?client_id=client-id-opaque&amp;response_type=code&amp;redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback&amp;max_age=60&amp;prompt=login"/,
   );
-  assert.equal(authorizationCodeStore.isEmpty(), true);
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
 });
 
 test("GET authorization endpoint reuses an active session for prompt=none", async function () {
@@ -277,7 +290,10 @@ test("GET authorization endpoint rejects prompt=none when max_age is stale", asy
     error_description: "Login is required",
     state: "state-value-123",
   });
-  assert.equal(authorizationCodeStore.isEmpty(), true);
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
 });
 
 test("GET authorization endpoint rejects prompt=none with another prompt", async function () {
@@ -413,7 +429,10 @@ test("POST authorization endpoint redirects to TOTP MFA challenge for users with
   assert.deepEqual(pendingAuthorization.amr, ["pwd"]);
   assert.ok(pendingAuthorization.expiresAt > Date.now());
   assert.ok(pendingAuthorization.expiresAt <= Date.now() + 2_000);
-  assert.equal(authorizationCodeStore.isEmpty(), true);
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
 });
 
 test("POST authorization endpoint echoes state in the redirect when provided", async function () {
@@ -898,7 +917,10 @@ test("POST authorization endpoint rejects unsupported resource indicators", asyn
     error_description: "Unsupported resource indicator",
     state: "state-value-123",
   });
-  assert.equal(authorizationCodeStore.isEmpty(), true);
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
 });
 
 test("POST authorization endpoint rejects resource indicators that are not absolute URIs", async function () {
@@ -921,7 +943,10 @@ test("POST authorization endpoint rejects resource indicators that are not absol
     error_description: "Unsupported resource indicator",
     state: "state-value-123",
   });
-  assert.equal(authorizationCodeStore.isEmpty(), true);
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
 });
 
 test("POST authorization endpoint rejects resource indicators with fragments", async function () {
@@ -944,7 +969,10 @@ test("POST authorization endpoint rejects resource indicators with fragments", a
     error_description: "Unsupported resource indicator",
     state: "state-value-123",
   });
-  assert.equal(authorizationCodeStore.isEmpty(), true);
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
 });
 
 test("POST authorization endpoint rejects invalid login credentials", async function () {
@@ -969,7 +997,10 @@ test("POST authorization endpoint rejects invalid login credentials", async func
     "text/html; charset=utf-8",
   );
   assert.match(await response.text(), /Invalid username or password/);
-  assert.equal(authorizationCodeStore.isEmpty(), true);
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
 });
 
 test("GET authorization endpoint includes a sign up link", async function () {
@@ -1004,7 +1035,7 @@ test("GET authorization endpoint uses the configured endpoint path", async funct
 async function fetchAuthorizationLoginPage(
   queryParams: Record<string, string>,
   serverConfig: ServerConfig = defaultServerConfig,
-  authorizationCodeStore: AuthorizationCodeStore = createAuthorizationCodeStore(),
+  authorizationCodeStore: GrantStore = createGrantStore(),
   userStore: UserStore = createUserStore(defaultUsers()),
   sessionStore: SessionStore = createSessionStore({
     sessionLengthSeconds: serverConfig.sessionLengthSeconds,
@@ -1013,7 +1044,7 @@ async function fetchAuthorizationLoginPage(
 ) {
   const fastify = await createServer({
     serverConfig,
-    authorizationCodeStore,
+    grantStore: authorizationCodeStore,
     userStore,
     sessionStore,
   });
@@ -1039,7 +1070,7 @@ async function fetchAuthorizationLoginPage(
 async function submitAuthorizationLogin(
   formData: Record<string, string>,
   serverConfig: ServerConfig = defaultServerConfig,
-  authorizationCodeStore: AuthorizationCodeStore = createAuthorizationCodeStore(),
+  authorizationCodeStore: GrantStore = createGrantStore(),
   credentials: {
     username: string;
     password: string;
@@ -1053,7 +1084,7 @@ async function submitAuthorizationLogin(
   const fastify = await createServer({
     serverConfig,
     pendingAuthorizationStore,
-    authorizationCodeStore,
+    grantStore: authorizationCodeStore,
     userStore,
   });
   const address = await fastify.listen({

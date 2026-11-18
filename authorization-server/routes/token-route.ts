@@ -4,9 +4,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { type JWTPayload, SignJWT } from "jose";
 import { type ClientConfig, clientsConfig } from "../config/clients-config.ts";
 import type { ServerConfig } from "../config/server-config.ts";
-import type { AuthorizationCodeStore } from "../stores/authorization-code-store.ts";
-import type { RefreshTokenStore } from "../stores/refresh-token-store.ts";
-import type { AccessTokenRecord, TokenStore } from "../stores/token-store.ts";
+import type { AccessTokenRecord, GrantStore } from "../stores/grant-store.ts";
 import type { UserStore } from "../stores/user-store.ts";
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
 
@@ -53,13 +51,7 @@ type RefreshTokenGrantResponse = {
  */
 export function registerTokenRoute(
   fastify: FastifyInstance,
-  {
-    serverConfig,
-    authorizationCodeStore,
-    tokenStore,
-    refreshTokenStore,
-    userStore,
-  }: ServerContext,
+  { serverConfig, grantStore, userStore }: ServerContext,
 ) {
   const tokenEndpointPath = new URL(serverConfig.tokenEndpoint).pathname;
 
@@ -156,9 +148,7 @@ export function registerTokenRoute(
         reply,
         serverConfig,
         clientConfig,
-        authorizationCodeStore,
-        tokenStore,
-        refreshTokenStore,
+        grantStore,
         userStore,
       });
     } else if (request.body.grant_type === "refresh_token") {
@@ -167,8 +157,7 @@ export function registerTokenRoute(
         reply,
         serverConfig,
         clientConfig,
-        tokenStore,
-        refreshTokenStore,
+        grantStore,
         userStore,
       });
     } else {
@@ -184,18 +173,14 @@ async function authCodeGrant({
   reply,
   serverConfig,
   clientConfig,
-  authorizationCodeStore,
-  tokenStore,
-  refreshTokenStore,
+  grantStore,
   userStore,
 }: {
   body: TokenRequestBody;
   reply: FastifyReply;
   serverConfig: ServerConfig;
   clientConfig: ClientConfig;
-  authorizationCodeStore: AuthorizationCodeStore;
-  tokenStore: TokenStore;
-  refreshTokenStore: RefreshTokenStore;
+  grantStore: GrantStore;
   userStore: UserStore;
 }) {
   if (!body.code) {
@@ -205,19 +190,16 @@ async function authCodeGrant({
     });
   }
 
-  // Check we have a record of the given auth code.
-  const authCodeRecord = authorizationCodeStore.loadAuthorizationCode(
-    body.code,
-  );
+  // Consume the code immediately so every redemption attempt is single-use.
+  const authCodeRecord = grantStore.consumeAuthorizationCode(body.code);
   if (authCodeRecord == null) {
     return reply.code(400).send({
       error: "invalid_grant",
-      error_description: "Unknown code",
+      error_description: "Unknown, used, or invalidated code",
     });
   }
 
   if (Date.now() > authCodeRecord.expiresAt) {
-    authorizationCodeStore.deleteAuthorizationCode(body.code);
     return reply.code(400).send({
       error: "invalid_grant",
       error_description: "Code expired",
@@ -264,17 +246,14 @@ async function authCodeGrant({
     }
   }
 
-  // Validation passed.
-  // Remove the authorization code so it can't be re-used.
-  authorizationCodeStore.deleteAuthorizationCode(body.code);
-
   const authTime = getAuthTimeForTokens(authCodeRecord);
 
   // Issue an access token.
   const access_token = await generateAccessToken({
     serverConfig,
     clientConfig,
-    tokenStore,
+    grantStore,
+    grantId: authCodeRecord.grantId,
     scope: authCodeRecord.scope,
     subject: authCodeRecord.subject,
     resource: authCodeRecord.resource,
@@ -312,7 +291,8 @@ async function authCodeGrant({
 
   // Refresh token
   if (hasScope(authCodeRecord.scope, "offline_access")) {
-    response.refresh_token = refreshTokenStore.generateNew(
+    response.refresh_token = grantStore.generateRefreshToken(
+      authCodeRecord.grantId,
       {
         clientId: authCodeRecord.clientId,
         resource: authCodeRecord.resource,
@@ -341,16 +321,14 @@ async function refreshTokenGrant({
   reply,
   serverConfig,
   clientConfig,
-  tokenStore,
-  refreshTokenStore,
+  grantStore,
   userStore,
 }: {
   body: TokenRequestBody;
   reply: FastifyReply;
   serverConfig: ServerConfig;
   clientConfig: ClientConfig;
-  tokenStore: TokenStore;
-  refreshTokenStore: RefreshTokenStore;
+  grantStore: GrantStore;
   userStore: UserStore;
 }) {
   if (!body.refresh_token) {
@@ -361,7 +339,7 @@ async function refreshTokenGrant({
   }
 
   // Check a matching refresh token exists.
-  const refreshRecord = refreshTokenStore.get(body.refresh_token);
+  const refreshRecord = grantStore.getRefreshToken(body.refresh_token);
   if (refreshRecord == null) {
     return reply.code(400).send({
       error: "invalid_grant",
@@ -373,7 +351,7 @@ async function refreshTokenGrant({
   const expiresAt = new Date(refreshRecord.expiresAt);
   const now = new Date();
   if (now > expiresAt) {
-    refreshTokenStore.delete(body.refresh_token);
+    grantStore.deleteRefreshToken(body.refresh_token);
     return reply.code(400).send({
       error: "invalid_grant",
       error_description: "Refresh token expired",
@@ -394,7 +372,8 @@ async function refreshTokenGrant({
   const access_token = await generateAccessToken({
     serverConfig,
     clientConfig,
-    tokenStore,
+    grantStore,
+    grantId: refreshRecord.grantId,
     resource: refreshRecord.resource,
     scope: refreshRecord.scope,
     subject: refreshRecord.subject,
@@ -470,7 +449,8 @@ function parseBasicAuthorizationHeader(
 async function generateAccessToken({
   serverConfig,
   clientConfig,
-  tokenStore,
+  grantStore,
+  grantId,
   scope,
   subject,
   resource,
@@ -479,7 +459,8 @@ async function generateAccessToken({
 }: {
   serverConfig: ServerConfig;
   clientConfig: ClientConfig;
-  tokenStore: TokenStore;
+  grantStore: GrantStore;
+  grantId: string;
   scope?: string;
   subject: string;
   resource?: string;
@@ -490,6 +471,7 @@ async function generateAccessToken({
     // Generate and save an access token.
     const accessToken = randomUUID();
     const accessTokenRecord: AccessTokenRecord = {
+      type: "opaque",
       clientId: clientConfig.clientId,
     };
 
@@ -507,7 +489,7 @@ async function generateAccessToken({
     if (scope) {
       accessTokenRecord.scope = scope;
     }
-    tokenStore.saveAccessToken(accessToken, accessTokenRecord);
+    grantStore.saveAccessToken(accessToken, grantId, accessTokenRecord);
     return accessToken;
   }
   // accessTokenType === "jwt"
@@ -533,11 +515,16 @@ async function generateAccessToken({
       payload.scope = scope;
     }
     const nowSeconds = getNowSeconds();
-    return await new SignJWT(payload)
+    const accessToken = await new SignJWT(payload)
       .setProtectedHeader({ alg: serverConfig.jwtSigningAlg, typ: "at+jwt" })
       .setIssuedAt(nowSeconds)
       .setExpirationTime(nowSeconds + clientConfig.accessTokenLifetimeSeconds)
       .sign(serverConfig.signingKey.privateKey);
+    const accessTokenRecord: AccessTokenRecord = {
+      type: "jwt",
+    };
+    grantStore.saveAccessToken(accessToken, grantId, accessTokenRecord);
+    return accessToken;
   }
 }
 

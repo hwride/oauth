@@ -41,7 +41,7 @@ export function registerAuthorizationRoute(
   {
     serverConfig,
     pendingAuthorizationStore,
-    authorizationCodeStore,
+    grantStore,
     sessionStore,
     userStore,
   }: ServerContext,
@@ -95,7 +95,7 @@ export function registerAuthorizationRoute(
         return reply.redirect(
           issueAuthorizationCodeAndRedirect(
             serverConfig,
-            authorizationCodeStore,
+            grantStore,
             authorizationRequest,
             sessionResult.user,
             sessionResult.session.amr,
@@ -259,7 +259,7 @@ export function registerAuthorizationRoute(
       .redirect(
         issueAuthorizationCodeAndRedirect(
           serverConfig,
-          authorizationCodeStore,
+          grantStore,
           authorizationRequest,
           user,
           // Password authentication, represented by RFC 8176's "pwd" AMR value.

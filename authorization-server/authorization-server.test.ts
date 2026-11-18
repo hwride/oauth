@@ -2,11 +2,10 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { createAuthorizationCodeStore } from "./stores/authorization-code-store.ts";
+import { createGrantStore as createAuthorizationCodeStore } from "./stores/grant-store.ts";
 import { createServer } from "./server.ts";
 import { defaultUsers, janeUserId, testUserId } from "./default-users.ts";
 import { getTestServerConfig } from "./test/test-utils.ts";
-import { createTokenStore } from "./stores/token-store.ts";
 import { createUserStore } from "./stores/user-store.ts";
 import { isUuidV4 } from "./utils/uuid.ts";
 import { clientsConfig } from "./config/clients-config.ts";
@@ -39,7 +38,7 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
   const fastify = await createServer({
     serverConfig: defaultServerConfig,
     pendingAuthorizationStore,
-    authorizationCodeStore,
+    grantStore: authorizationCodeStore,
   });
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -165,7 +164,7 @@ test("authorization server reuses a session without requiring credentials", asyn
   const authorizationCodeStore = createAuthorizationCodeStore();
   const fastify = await createServer({
     serverConfig: defaultServerConfig,
-    authorizationCodeStore,
+    grantStore: authorizationCodeStore,
   });
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -246,7 +245,7 @@ test("authorization server requires credentials for prompt=login with an existin
   const authorizationCodeStore = createAuthorizationCodeStore();
   const fastify = await createServer({
     serverConfig: defaultServerConfig,
-    authorizationCodeStore,
+    grantStore: authorizationCodeStore,
   });
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -313,11 +312,10 @@ test("authorization server requires credentials for prompt=login with an existin
 
 test("max_age includes auth_time on initial and refreshed tokens", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const fastify = await createServer({
     serverConfig: defaultServerConfig,
-    authorizationCodeStore,
-    tokenStore,
+    grantStore: authorizationCodeStore,
   });
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -337,9 +335,9 @@ test("max_age includes auth_time on initial and refreshed tokens", async functio
     );
     assert.equal(authorizationResponse.status, 302);
 
-    const authorizationCode = getRedirectUrl(authorizationResponse).searchParams.get(
-      "code",
-    );
+    const authorizationCode = getRedirectUrl(
+      authorizationResponse,
+    ).searchParams.get("code");
     assert.notEqual(authorizationCode, null);
     const authorizationCodeRecord =
       authorizationCodeStore.loadAuthorizationCode(authorizationCode);
@@ -438,11 +436,10 @@ test("max_age includes auth_time on initial and refreshed tokens", async functio
 
 test("authorization code can be issued and exchanged for an opaque access token", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const fastify = await createServer({
     serverConfig: defaultServerConfig,
-    authorizationCodeStore,
-    tokenStore,
+    grantStore: authorizationCodeStore,
   });
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -489,6 +486,7 @@ test("authorization code can be issued and exchanged for an opaque access token"
     assert.deepEqual(
       tokenStore.loadAccessToken(tokenResponseBody.access_token),
       {
+        type: "opaque",
         clientId: "client-id-opaque",
         amr: ["pwd"],
       },
@@ -500,11 +498,10 @@ test("authorization code can be issued and exchanged for an opaque access token"
 
 test("authorization code can be issued and exchanged for a jwt access token verified via the auth server jwks url", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const fastify = await createServer({
     serverConfig: defaultServerConfig,
-    authorizationCodeStore,
-    tokenStore,
+    grantStore: authorizationCodeStore,
   });
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -568,8 +565,11 @@ test("authorization code can be issued and exchanged for a jwt access token veri
 
     // Check auth code was removed.
     assert.equal(authorizationCodeStore.hasAuthorizationCode(code), false);
-    // JWT access tokens are self-contained and are not stored server-side.
-    assert.equal(tokenStore.isEmpty(), true);
+    // JWT access tokens are also associated with the grant for revocation.
+    assert.ok(
+      (tokenStore.getGrantByAuthorizationCode(code)?.accessTokens.size ?? 0) >
+        0,
+    );
   } finally {
     await fastify.close();
   }
@@ -577,11 +577,10 @@ test("authorization code can be issued and exchanged for a jwt access token veri
 
 test("authorization code flow supports PKCE and state together", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const fastify = await createServer({
     serverConfig: defaultServerConfig,
-    authorizationCodeStore,
-    tokenStore,
+    grantStore: authorizationCodeStore,
   });
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -656,7 +655,10 @@ test("authorization code flow supports PKCE and state together", async function 
     assert.equal(verified.payload.client_id, "client-id-jwt");
 
     assert.equal(authorizationCodeStore.hasAuthorizationCode(code), false);
-    assert.equal(tokenStore.isEmpty(), true);
+    assert.ok(
+      (tokenStore.getGrantByAuthorizationCode(code)?.accessTokens.size ?? 0) >
+        0,
+    );
   } finally {
     await fastify.close();
   }
@@ -664,11 +666,10 @@ test("authorization code flow supports PKCE and state together", async function 
 
 test("OIDC authorization code flow with nonce", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const fastify = await createServer({
     serverConfig: defaultServerConfig,
-    authorizationCodeStore,
-    tokenStore,
+    grantStore: authorizationCodeStore,
   });
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -780,7 +781,10 @@ test("OIDC authorization code flow with nonce", async function () {
     });
 
     assert.equal(authorizationCodeStore.hasAuthorizationCode(code), false);
-    assert.equal(tokenStore.isEmpty(), true);
+    assert.ok(
+      (tokenStore.getGrantByAuthorizationCode(code)?.accessTokens.size ?? 0) >
+        0,
+    );
   } finally {
     await fastify.close();
   }
@@ -788,11 +792,10 @@ test("OIDC authorization code flow with nonce", async function () {
 
 test("OIDC refresh token flow returns new access and ID tokens", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const fastify = await createServer({
     serverConfig: defaultServerConfig,
-    authorizationCodeStore,
-    tokenStore,
+    grantStore: authorizationCodeStore,
   });
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -899,7 +902,10 @@ test("OIDC refresh token flow returns new access and ID tokens", async function 
     assert.ok(
       verifiedRefreshIdToken.payload.iat > verifiedInitialIdToken.payload.iat,
     );
-    assert.equal(tokenStore.isEmpty(), true);
+    assert.ok(
+      (tokenStore.getGrantByAuthorizationCode(code)?.accessTokens.size ?? 0) >
+        0,
+    );
   } finally {
     await fastify.close();
   }
@@ -907,12 +913,11 @@ test("OIDC refresh token flow returns new access and ID tokens", async function 
 
 test("signup route preserves prompt and creates a user who can then log in and receive a valid jwt access token", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const userStore = createUserStore([]);
   const fastify = await createServer({
     serverConfig: defaultServerConfig,
-    authorizationCodeStore,
-    tokenStore,
+    grantStore: authorizationCodeStore,
     userStore,
   });
   const address = await fastify.listen({
@@ -1003,7 +1008,10 @@ test("signup route preserves prompt and creates a user who can then log in and r
     assert.ok(verified.payload.exp > verified.payload.iat);
 
     assert.equal(authorizationCodeStore.hasAuthorizationCode(code), false);
-    assert.equal(tokenStore.isEmpty(), true);
+    assert.ok(
+      (tokenStore.getGrantByAuthorizationCode(code)?.accessTokens.size ?? 0) >
+        0,
+    );
   } finally {
     await fastify.close();
   }

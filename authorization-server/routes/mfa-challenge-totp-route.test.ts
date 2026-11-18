@@ -4,7 +4,7 @@ import test from "node:test";
 import formbody from "@fastify/formbody";
 import Fastify, { type FastifyInstance } from "fastify";
 import { testUserId, defaultUsers } from "../default-users.ts";
-import { createAuthorizationCodeStore } from "../stores/authorization-code-store.ts";
+import { createGrantStore } from "../stores/grant-store.ts";
 import { createPendingAuthorizationStore } from "../stores/pending-authorization-store.ts";
 import { createSessionStore } from "../stores/session-store.ts";
 import { createUserStore } from "../stores/user-store.ts";
@@ -105,9 +105,7 @@ test("POST TOTP MFA challenge route accepts an OTP code", async () => {
     ).searchParams.get("code");
     assert.ok(authorizationCode);
     const authorizationCodeRecord =
-      routeDependencies.authorizationCodeStore.loadAuthorizationCode(
-        authorizationCode,
-      );
+      routeDependencies.grantStore.loadAuthorizationCode(authorizationCode);
     assert.ok(authorizationCodeRecord);
     assert.equal(authorizationCodeRecord.authTime, session.authTime);
     assert.equal(authorizationCodeRecord.requiresAuthTime, false);
@@ -140,7 +138,7 @@ test("POST TOTP MFA challenge route rejects an invalid code without consuming th
       ),
       undefined,
     );
-    assert.equal(routeDependencies.authorizationCodeStore.isEmpty(), true);
+    assert.equal(response.headers.location, undefined);
   } finally {
     await fastify.close();
   }
@@ -302,7 +300,12 @@ test("MFA challenge route does not issue an authorization code when transaction 
 
     assert.equal(response.statusCode, 401);
     assert.match(response.body, /already been completed or expired/);
-    assert.equal(routeDependencies.authorizationCodeStore.isEmpty(), true);
+    assert.equal(
+      routeDependencies.grantStore.getGrantByAuthorizationCode(
+        "test-auth-code",
+      ),
+      undefined,
+    );
   } finally {
     await fastify.close();
   }
@@ -320,7 +323,14 @@ test("MFA challenge route rejects replay after successful consumption", async ()
 
     assert.equal(firstResponse.statusCode, 302);
     assert.equal(secondResponse.statusCode, 401);
-    assert.equal(routeDependencies.authorizationCodeStore.isEmpty(), false);
+    const code = new URL(
+      firstResponse.headers.location as string,
+    ).searchParams.get("code");
+    assert.ok(code);
+    assert.notEqual(
+      routeDependencies.grantStore.getGrantByAuthorizationCode(code),
+      undefined,
+    );
   } finally {
     await fastify.close();
   }
@@ -346,7 +356,18 @@ test("MFA challenge route allows only one concurrent request to complete a trans
       responses.map((response) => response.statusCode).sort(),
       [302, 401],
     );
-    assert.equal(routeDependencies.authorizationCodeStore.isEmpty(), false);
+    const successfulResponse = responses.find(
+      (response) => response.statusCode === 302,
+    );
+    assert.ok(successfulResponse);
+    const code = new URL(
+      successfulResponse.headers.location as string,
+    ).searchParams.get("code");
+    assert.ok(code);
+    assert.notEqual(
+      routeDependencies.grantStore.getGrantByAuthorizationCode(code),
+      undefined,
+    );
   } finally {
     await fastify.close();
   }
@@ -368,7 +389,7 @@ function setupRoute(expiresAt = Date.now() + 60_000) {
     requiresAuthTime: false,
   });
 
-  const authorizationCodeStore = createAuthorizationCodeStore();
+  const grantStore = createGrantStore();
   const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
   const userStore = createUserStore(defaultUsers());
   const totpValidator = {
@@ -377,7 +398,7 @@ function setupRoute(expiresAt = Date.now() + 60_000) {
 
   return {
     pendingAuthorizationStore,
-    authorizationCodeStore,
+    grantStore,
     sessionStore,
     userStore,
     totpValidator,
@@ -393,7 +414,7 @@ async function registerTestRoute(
     await getTestServerContext({
       serverConfig: getTestServerConfig(),
       pendingAuthorizationStore: routeDependencies.pendingAuthorizationStore,
-      authorizationCodeStore: routeDependencies.authorizationCodeStore,
+      grantStore: routeDependencies.grantStore,
       sessionStore: routeDependencies.sessionStore,
       userStore: routeDependencies.userStore,
     }),

@@ -10,11 +10,9 @@ test("server contexts create independent stores for each server instance", async
 
   for (const name of [
     "pendingAuthorizationStore",
-    "authorizationCodeStore",
+    "grantStore",
     "sessionStore",
-    "tokenStore",
     "userStore",
-    "refreshTokenStore",
   ] as const) {
     assert.notEqual(first[name], second[name], name);
   }
