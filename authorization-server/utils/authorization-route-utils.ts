@@ -4,7 +4,7 @@ import {
   type SupportedResource,
 } from "../config/resources-config.ts";
 import type { ServerConfig } from "../config/server-config.ts";
-import type { AuthorizationCodeStore } from "../stores/authorization-code-store.ts";
+import type { GrantStore } from "../stores/grant-store.ts";
 import type { UserRecord } from "../stores/user-store.ts";
 import type { AuthorizationRequest } from "../types/authorization-request.ts";
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
@@ -30,7 +30,7 @@ const unrestrictedScopes = new Set([
  */
 export function issueAuthorizationCodeAndRedirect(
   serverConfig: ServerConfig,
-  authorizationCodeStore: AuthorizationCodeStore,
+  grantStore: GrantStore,
   authorizationRequest: AuthorizationRequest,
   user: UserRecord,
   amr: AuthenticationMethodReference[],
@@ -38,7 +38,7 @@ export function issueAuthorizationCodeAndRedirect(
   requiresAuthTime: boolean,
 ) {
   const code = randomUUID();
-  authorizationCodeStore.saveAuthorizationCode(code, {
+  grantStore.createAuthorizationCodeGrant(code, {
     clientId: authorizationRequest.clientId,
     subject: user.userId,
     amr,

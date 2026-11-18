@@ -26,7 +26,7 @@ export function registerMfaChallengeTotpRoute(
   {
     serverConfig,
     pendingAuthorizationStore,
-    authorizationCodeStore,
+    grantStore,
     userStore,
     sessionStore,
   }: ServerContext,
@@ -244,7 +244,7 @@ export function registerMfaChallengeTotpRoute(
       .redirect(
         issueAuthorizationCodeAndRedirect(
           serverConfig,
-          authorizationCodeStore,
+          grantStore,
           authorizationRequest,
           user,
           amrUpdated,

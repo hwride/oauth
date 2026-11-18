@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAuthorizationCodeStore } from "../stores/authorization-code-store.ts";
+import { createGrantStore } from "../stores/grant-store.ts";
 import { ordersApiResource } from "../config/resources-config.ts";
 import type { ServerConfig } from "../config/server-config.ts";
 import { createServer } from "../server.ts";
@@ -152,7 +152,7 @@ async function fetchSignupPage(
 ) {
   const fastify = await createServer({
     serverConfig,
-    authorizationCodeStore: createAuthorizationCodeStore(),
+    grantStore: createGrantStore(),
   });
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -176,7 +176,7 @@ async function submitSignupForm(
 ) {
   const fastify = await createServer({
     serverConfig,
-    authorizationCodeStore: createAuthorizationCodeStore(),
+    grantStore: createGrantStore(),
     userStore,
   });
   const address = await fastify.listen({

@@ -2,19 +2,11 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import { jwtVerify } from "jose";
-import {
-  createAuthorizationCodeStore,
-  type AuthorizationCodeStore,
-} from "../stores/authorization-code-store.ts";
+import { createGrantStore, type GrantStore } from "../stores/grant-store.ts";
 import { ordersApiResource } from "../config/resources-config.ts";
 import type { ServerConfig } from "../config/server-config.ts";
-import {
-  createRefreshTokenStore,
-  type RefreshTokenStore,
-} from "../stores/refresh-token-store.ts";
 import { createServer } from "../server.ts";
 import { getTestServerConfig } from "../test/test-utils.ts";
-import { createTokenStore, type TokenStore } from "../stores/token-store.ts";
 import { createUserStore, type UserStore } from "../stores/user-store.ts";
 
 const defaultServerConfig = getTestServerConfig();
@@ -127,9 +119,7 @@ test("POST token endpoint accepts client_secret_post authentication", async func
       redirect_uri: "http://localhost:3000/callback",
     },
     defaultServerConfig,
-    createAuthorizationCodeStoreWithCodeForClient(
-      "client-id-jwt-post-auth",
-    ),
+    createAuthorizationCodeStoreWithCodeForClient("client-id-jwt-post-auth"),
   );
 
   assert.equal(response.status, 200);
@@ -144,9 +134,7 @@ test("POST token endpoint rejects invalid client_secret_post authentication", as
       code: "test-auth-code",
     },
     defaultServerConfig,
-    createAuthorizationCodeStoreWithCodeForClient(
-      "client-id-jwt-post-auth",
-    ),
+    createAuthorizationCodeStoreWithCodeForClient("client-id-jwt-post-auth"),
   );
 
   assert.equal(response.status, 401);
@@ -188,7 +176,7 @@ test("POST token endpoint rejects unknown authorization code", async function ()
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), {
     error: "invalid_grant",
-    error_description: "Unknown code",
+    error_description: "Unknown, used, or invalidated code",
   });
 });
 
@@ -299,7 +287,7 @@ test("POST token endpoint returns an opaque access token for valid plain PKCE ex
     codeChallenge: "expected-verifier",
     codeChallengeMethod: "plain",
   });
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const response = await fetchTokenEndpoint(
     {
       grant_type: "authorization_code",
@@ -310,7 +298,6 @@ test("POST token endpoint returns an opaque access token for valid plain PKCE ex
     defaultServerConfig,
     authorizationCodeStore,
     createBasicAuthHeader("client-id-opaque", "test-client-secret"),
-    tokenStore,
   );
 
   assert.equal(response.status, 200);
@@ -327,6 +314,7 @@ test("POST token endpoint returns an opaque access token for valid plain PKCE ex
   assert.equal(typeof tokenResponse.access_token, "string");
   assert.notEqual(tokenResponse.access_token.length, 0);
   assert.deepEqual(tokenStore.loadAccessToken(tokenResponse.access_token), {
+    type: "opaque",
     clientId: "client-id-opaque",
     amr: ["pwd"],
   });
@@ -342,7 +330,7 @@ test("POST token endpoint returns an opaque access token for valid S256 PKCE exc
     codeChallenge: createS256CodeChallenge(codeVerifier),
     codeChallengeMethod: "S256",
   });
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const response = await fetchTokenEndpoint(
     {
       grant_type: "authorization_code",
@@ -353,7 +341,6 @@ test("POST token endpoint returns an opaque access token for valid S256 PKCE exc
     defaultServerConfig,
     authorizationCodeStore,
     createBasicAuthHeader("client-id-opaque", "test-client-secret"),
-    tokenStore,
   );
 
   assert.equal(response.status, 200);
@@ -370,6 +357,7 @@ test("POST token endpoint returns an opaque access token for valid S256 PKCE exc
   assert.equal(typeof tokenResponse.access_token, "string");
   assert.notEqual(tokenResponse.access_token.length, 0);
   assert.deepEqual(tokenStore.loadAccessToken(tokenResponse.access_token), {
+    type: "opaque",
     clientId: "client-id-opaque",
     amr: ["pwd"],
   });
@@ -381,7 +369,7 @@ test("POST token endpoint returns an opaque access token for valid S256 PKCE exc
 
 test("POST token endpoint returns an opaque access token for valid code exchange", async function () {
   const authorizationCodeStore = createAuthorizationCodeStoreWithCode();
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const response = await fetchTokenEndpoint(
     {
       grant_type: "authorization_code",
@@ -391,7 +379,6 @@ test("POST token endpoint returns an opaque access token for valid code exchange
     defaultServerConfig,
     authorizationCodeStore,
     createBasicAuthHeader("client-id-opaque", "test-client-secret"),
-    tokenStore,
   );
 
   assert.equal(response.status, 200);
@@ -408,6 +395,7 @@ test("POST token endpoint returns an opaque access token for valid code exchange
   assert.equal(typeof tokenResponse.access_token, "string");
   assert.notEqual(tokenResponse.access_token.length, 0);
   assert.deepEqual(tokenStore.loadAccessToken(tokenResponse.access_token), {
+    type: "opaque",
     clientId: "client-id-opaque",
     amr: ["pwd"],
   });
@@ -418,17 +406,17 @@ test("POST token endpoint returns an opaque access token for valid code exchange
 });
 
 test("POST token endpoint stores auth context with an opaque access token", async function () {
-  const authorizationCodeStore = createAuthorizationCodeStoreWithCodeForClient(
-    "client-id-opaque",
-  );
+  const authorizationCodeStore =
+    createAuthorizationCodeStoreWithCodeForClient("client-id-opaque");
   const authorizationCodeRecord =
-    authorizationCodeStore.loadAuthorizationCode("test-auth-code");
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code")
+      ?.authorizationCode.record;
   assert.ok(authorizationCodeRecord);
   authorizationCodeRecord.amr = ["pwd", "otp"];
   authorizationCodeRecord.authTime = 1_700_000_123_456;
   authorizationCodeRecord.requiresAuthTime = true;
 
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const response = await fetchTokenEndpoint(
     {
       grant_type: "authorization_code",
@@ -438,12 +426,12 @@ test("POST token endpoint stores auth context with an opaque access token", asyn
     defaultServerConfig,
     authorizationCodeStore,
     createBasicAuthHeader("client-id-opaque", "test-client-secret"),
-    tokenStore,
   );
 
   assert.equal(response.status, 200);
   const tokenResponse = (await response.json()) as { access_token: string };
   assert.deepEqual(tokenStore.loadAccessToken(tokenResponse.access_token), {
+    type: "opaque",
     clientId: "client-id-opaque",
     amr: ["pwd", "otp"],
     authTime: 1_700_000_123,
@@ -451,8 +439,11 @@ test("POST token endpoint stores auth context with an opaque access token", asyn
 });
 
 test("POST token endpoint makes authorization codes one-time use", async function () {
-  const authorizationCodeStore = createAuthorizationCodeStoreWithCode();
-  const tokenStore = createTokenStore();
+  const authorizationCodeStore = createAuthorizationCodeStoreWithCodeForClient(
+    "client-id-opaque",
+    "offline_access",
+  );
+  const tokenStore = authorizationCodeStore;
 
   const firstResponse = await fetchTokenEndpoint(
     {
@@ -463,10 +454,25 @@ test("POST token endpoint makes authorization codes one-time use", async functio
     defaultServerConfig,
     authorizationCodeStore,
     createBasicAuthHeader("client-id-opaque", "test-client-secret"),
-    tokenStore,
   );
   assert.equal(firstResponse.status, 200);
   assertSensitiveTokenResponseHeaders(firstResponse);
+  const firstTokenResponse = (await firstResponse.json()) as {
+    access_token: string;
+    refresh_token: string;
+  };
+  const grantBeforeReplay =
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code");
+  assert.ok(grantBeforeReplay);
+  assert.equal(grantBeforeReplay.state, "active");
+  assert.notEqual(
+    tokenStore.loadAccessToken(firstTokenResponse.access_token),
+    undefined,
+  );
+  assert.notEqual(
+    tokenStore.getRefreshToken(firstTokenResponse.refresh_token),
+    undefined,
+  );
 
   const secondResponse = await fetchTokenEndpoint(
     {
@@ -477,20 +483,57 @@ test("POST token endpoint makes authorization codes one-time use", async functio
     defaultServerConfig,
     authorizationCodeStore,
     createBasicAuthHeader("client-id-opaque", "test-client-secret"),
-    tokenStore,
   );
 
   assert.equal(secondResponse.status, 400);
   assert.deepEqual(await secondResponse.json(), {
     error: "invalid_grant",
-    error_description: "Unknown code",
+    error_description: "Unknown, used, or invalidated code",
   });
+  const grantAfterReplay =
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code");
+  assert.ok(grantAfterReplay);
+  assert.equal(grantAfterReplay.state, "revoked");
+  assert.equal(
+    tokenStore.loadAccessToken(firstTokenResponse.access_token),
+    undefined,
+  );
+  assert.equal(
+    tokenStore.getRefreshToken(firstTokenResponse.refresh_token),
+    undefined,
+  );
+});
+
+test("POST token endpoint consumes an authorization code before later validation", async function () {
+  const grantStore = createAuthorizationCodeStoreWithCode();
+  const response = await fetchTokenEndpoint(
+    {
+      grant_type: "authorization_code",
+      code: "test-auth-code",
+      redirect_uri: "http://localhost:3000/wrong-callback",
+    },
+    defaultServerConfig,
+    grantStore,
+    createBasicAuthHeader("client-id-opaque", "test-client-secret"),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "invalid_grant",
+    error_description: "Invalid redirect_uri",
+  });
+  assert.equal(grantStore.hasAuthorizationCode("test-auth-code"), false);
+  assert.equal(
+    typeof grantStore.getGrantByAuthorizationCode("test-auth-code")
+      ?.authorizationCode.usedAt,
+    "number",
+  );
 });
 
 test("POST token endpoint returns a signed jwt for jwt access token type", async function () {
   const authorizationCodeStore =
     createAuthorizationCodeStoreWithCodeForClient("client-id-jwt");
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const response = await fetchTokenEndpoint(
     {
       grant_type: "authorization_code",
@@ -500,7 +543,6 @@ test("POST token endpoint returns a signed jwt for jwt access token type", async
     defaultServerConfig,
     authorizationCodeStore,
     createBasicAuthHeader("client-id-jwt", "other-test-client-secret"),
-    tokenStore,
   );
 
   assert.equal(response.status, 200);
@@ -532,6 +574,9 @@ test("POST token endpoint returns a signed jwt for jwt access token type", async
   assert.equal(verified.payload.auth_time, undefined);
   assert.equal(typeof verified.payload.jti, "string");
   assert.notEqual(verified.payload.jti.length, 0);
+  assert.deepEqual(tokenStore.loadAccessToken(tokenResponse.access_token), {
+    type: "jwt",
+  });
   assert.equal(typeof verified.payload.iat, "number");
   assert.equal(typeof verified.payload.exp, "number");
   assert.ok(verified.payload.exp > verified.payload.iat);
@@ -539,7 +584,10 @@ test("POST token endpoint returns a signed jwt for jwt access token type", async
     authorizationCodeStore.hasAuthorizationCode("test-auth-code"),
     false,
   );
-  assert.equal(tokenStore.isEmpty(), true);
+  assert.ok(
+    (tokenStore.getGrantByAuthorizationCode("test-auth-code")?.accessTokens
+      .size ?? 0) > 0,
+  );
 });
 
 test("POST token endpoint includes scope in response and access token when present on auth code", async function () {
@@ -547,7 +595,7 @@ test("POST token endpoint includes scope in response and access token when prese
     "client-id-jwt",
     "openid profile",
   );
-  const tokenStore = createTokenStore();
+  const tokenStore = authorizationCodeStore;
   const response = await fetchTokenEndpoint(
     {
       grant_type: "authorization_code",
@@ -581,7 +629,10 @@ test("POST token endpoint includes scope in response and access token when prese
   );
 
   assert.equal(verified.payload.scope, "openid profile");
-  assert.equal(tokenStore.isEmpty(), true);
+  assert.ok(
+    (tokenStore.getGrantByAuthorizationCode("test-auth-code")?.accessTokens
+      .size ?? 0) > 0,
+  );
 });
 
 test("POST token endpoint sets aud to orders API resource when resource indicator is present without openid scope", async function () {
@@ -836,7 +887,7 @@ test("POST token endpoint includes refresh_token when scope includes offline_acc
     "nonce-value-123",
     "state-value-123",
   );
-  const refreshTokenStore = createRefreshTokenStore();
+  const refreshTokenStore = authorizationCodeStore;
   const response = await fetchTokenEndpoint(
     {
       grant_type: "authorization_code",
@@ -858,7 +909,9 @@ test("POST token endpoint includes refresh_token when scope includes offline_acc
   assert.equal(typeof tokenResponse.refresh_token, "string");
   assert.notEqual(tokenResponse.refresh_token.length, 0);
 
-  const refreshTokenRecord = refreshTokenStore.get(tokenResponse.refresh_token);
+  const refreshTokenRecord = refreshTokenStore.getRefreshToken(
+    tokenResponse.refresh_token,
+  );
   assert.notEqual(refreshTokenRecord, undefined);
   assert.equal(refreshTokenRecord.clientId, "client-id-opaque");
   assert.equal(refreshTokenRecord.scope, "openid offline_access email");
@@ -870,11 +923,11 @@ test("POST token endpoint includes refresh_token when scope includes offline_acc
 });
 
 test("POST token endpoint includes auth context claims in a jwt access token", async function () {
-  const authorizationCodeStore = createAuthorizationCodeStoreWithCodeForClient(
-    "client-id-jwt",
-  );
+  const authorizationCodeStore =
+    createAuthorizationCodeStoreWithCodeForClient("client-id-jwt");
   const authorizationCodeRecord =
-    authorizationCodeStore.loadAuthorizationCode("test-auth-code");
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code")
+      ?.authorizationCode.record;
   assert.ok(authorizationCodeRecord);
   authorizationCodeRecord.amr = ["pwd", "otp"];
   authorizationCodeRecord.authTime = 1_700_000_123_456;
@@ -916,7 +969,7 @@ test("POST token endpoint stores resource indicator with refresh_token", async f
     "test-user-id",
     ordersApiResource,
   );
-  const refreshTokenStore = createRefreshTokenStore();
+  const refreshTokenStore = authorizationCodeStore;
   const response = await fetchTokenEndpoint(
     {
       grant_type: "authorization_code",
@@ -935,7 +988,9 @@ test("POST token endpoint stores resource indicator with refresh_token", async f
     refresh_token: string;
   };
 
-  const refreshTokenRecord = refreshTokenStore.get(tokenResponse.refresh_token);
+  const refreshTokenRecord = refreshTokenStore.getRefreshToken(
+    tokenResponse.refresh_token,
+  );
   assert.notEqual(refreshTokenRecord, undefined);
   assert.equal(refreshTokenRecord.resource, ordersApiResource);
 });
@@ -1191,7 +1246,7 @@ test("POST token endpoint returns access token without rotating static refresh t
     },
     172800,
   );
-  const tokenStore = createTokenStore();
+  const tokenStore = refreshTokenStore;
 
   const response = await fetchTokenEndpoint(
     {
@@ -1223,6 +1278,7 @@ test("POST token endpoint returns access token without rotating static refresh t
   assert.equal(tokenResponse.refresh_token, undefined);
   assert.equal(refreshTokenStore.hasToken(refreshToken), true);
   assert.deepEqual(tokenStore.loadAccessToken(tokenResponse.access_token), {
+    type: "opaque",
     clientId: "client-id-opaque",
     scope: "offline_access email",
   });
@@ -1231,18 +1287,19 @@ test("POST token endpoint returns access token without rotating static refresh t
 async function fetchTokenEndpoint(
   queryParams: Record<string, string>,
   serverConfig: ServerConfig = defaultServerConfig,
-  authorizationCodeStore: AuthorizationCodeStore = createAuthorizationCodeStore(),
+  authorizationCodeStore: GrantStore = createGrantStore(),
   authorizationHeader?: string,
-  tokenStore: TokenStore = createTokenStore(),
-  refreshTokenStore: RefreshTokenStore = createRefreshTokenStore(),
+  tokenStore: GrantStore = authorizationCodeStore,
+  refreshTokenStore: GrantStore = authorizationCodeStore,
   userStore: UserStore = createUserStore(),
 ) {
   const fastify = await createServer({
     serverConfig,
-    authorizationCodeStore,
-    tokenStore,
+    grantStore:
+      queryParams.grant_type === "refresh_token"
+        ? refreshTokenStore
+        : authorizationCodeStore,
     userStore,
-    refreshTokenStore,
   });
   const address = await fastify.listen({
     host: "127.0.0.1",
@@ -1313,7 +1370,7 @@ function createAuthorizationCodeStoreWithCodeExpiresAtForClient(
   resource?: string,
 ) {
   const authorizationCodeStore = createAuthorizationCodeStore();
-  authorizationCodeStore.saveAuthorizationCode("test-auth-code", {
+  authorizationCodeStore.createAuthorizationCodeGrant("test-auth-code", {
     clientId,
     subject,
     authTime: 0,
@@ -1340,7 +1397,7 @@ function createAuthorizationCodeStoreWithCodeAndPkce({
   clientId?: string;
 }) {
   const authorizationCodeStore = createAuthorizationCodeStore();
-  authorizationCodeStore.saveAuthorizationCode("test-auth-code", {
+  authorizationCodeStore.createAuthorizationCodeGrant("test-auth-code", {
     clientId,
     subject: "test-user-id",
     authTime: 0,
@@ -1368,4 +1425,43 @@ function assertSensitiveTokenResponseHeaders(response: Response) {
 
 function createS256CodeChallenge(codeVerifier: string) {
   return createHash("sha256").update(codeVerifier).digest("base64url");
+}
+
+function createAuthorizationCodeStore() {
+  return createGrantStore();
+}
+
+function createTokenStore() {
+  return createGrantStore();
+}
+
+function createRefreshTokenStore() {
+  const grantStore = createGrantStore();
+  const grantId = grantStore.createAuthorizationCodeGrant(
+    "test-refresh-token-grant",
+    {
+      clientId: "test-client-id",
+      subject: "test-user-id",
+      authTime: 0,
+      requiresAuthTime: false,
+      amr: [],
+      redirectUri: "http://localhost:3000/callback",
+      expiresAt: Date.now() + 60_000,
+    },
+  );
+
+  return Object.assign(grantStore, {
+    generateNew(
+      record: Parameters<GrantStore["generateRefreshToken"]>[1],
+      lifetimeSeconds: number,
+    ) {
+      return grantStore.generateRefreshToken(grantId, record, lifetimeSeconds);
+    },
+    get(token: string) {
+      return grantStore.getRefreshToken(token);
+    },
+    hasToken(token: string) {
+      return grantStore.hasRefreshToken(token);
+    },
+  });
 }

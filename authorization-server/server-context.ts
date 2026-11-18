@@ -4,16 +4,8 @@ import {
   createPendingAuthorizationStore,
   type PendingAuthorizationStore,
 } from "./stores/pending-authorization-store.ts";
-import {
-  createAuthorizationCodeStore,
-  type AuthorizationCodeStore,
-} from "./stores/authorization-code-store.ts";
-import { createTokenStore, type TokenStore } from "./stores/token-store.ts";
+import { createGrantStore, type GrantStore } from "./stores/grant-store.ts";
 import { createUserStore, type UserStore } from "./stores/user-store.ts";
-import {
-  createRefreshTokenStore,
-  type RefreshTokenStore,
-} from "./stores/refresh-token-store.ts";
 import {
   createSessionStore,
   type SessionStore,
@@ -22,11 +14,9 @@ import {
 export type ServerContext = {
   serverConfig: ServerConfig;
   pendingAuthorizationStore: PendingAuthorizationStore;
-  authorizationCodeStore: AuthorizationCodeStore;
+  grantStore: GrantStore;
   sessionStore: SessionStore;
-  tokenStore: TokenStore;
   userStore: UserStore;
-  refreshTokenStore: RefreshTokenStore;
 };
 
 export async function createServerContext(
@@ -38,15 +28,12 @@ export async function createServerContext(
     serverConfig,
     pendingAuthorizationStore:
       overrides.pendingAuthorizationStore ?? createPendingAuthorizationStore(),
-    authorizationCodeStore:
-      overrides.authorizationCodeStore ?? createAuthorizationCodeStore(),
+    grantStore: overrides.grantStore ?? createGrantStore(),
     sessionStore:
       overrides.sessionStore ??
       createSessionStore({
         sessionLengthSeconds: serverConfig.sessionLengthSeconds,
       }),
-    tokenStore: overrides.tokenStore ?? createTokenStore(),
     userStore: overrides.userStore ?? createUserStore(defaultUsers()),
-    refreshTokenStore: overrides.refreshTokenStore ?? createRefreshTokenStore(),
   };
 }
