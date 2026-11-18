@@ -493,12 +493,12 @@ test("POST token endpoint makes authorization codes one-time use", async functio
   const grantAfterReplay =
     authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code");
   assert.ok(grantAfterReplay);
-  assert.equal(grantAfterReplay.state, "active");
-  assert.notEqual(
+  assert.equal(grantAfterReplay.state, "revoked");
+  assert.equal(
     tokenStore.loadAccessToken(firstTokenResponse.access_token),
     undefined,
   );
-  assert.notEqual(
+  assert.equal(
     tokenStore.getRefreshToken(firstTokenResponse.refresh_token),
     undefined,
   );

@@ -2,6 +2,7 @@ import type { ServerContext } from "../server-context.ts";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { jwtVerify } from "jose";
 import type { ServerConfig } from "../config/server-config.ts";
+import type { GrantStore } from "../stores/grant-store.ts";
 import type { UserStore } from "../stores/user-store.ts";
 
 const bearerChallenge = `Bearer realm="userinfo"`;
@@ -11,14 +12,26 @@ const bearerChallenge = `Bearer realm="userinfo"`;
  */
 export function registerUserinfoRoute(
   fastify: FastifyInstance,
-  { serverConfig, userStore }: ServerContext,
+  { serverConfig, grantStore, userStore }: ServerContext,
 ) {
   fastify.get("/userinfo", async function (request, reply) {
-    return await handleUserinfoRequest(request, reply, serverConfig, userStore);
+    return await handleUserinfoRequest(
+      request,
+      reply,
+      serverConfig,
+      grantStore,
+      userStore,
+    );
   });
 
   fastify.post("/userinfo", async function (request, reply) {
-    return await handleUserinfoRequest(request, reply, serverConfig, userStore);
+    return await handleUserinfoRequest(
+      request,
+      reply,
+      serverConfig,
+      grantStore,
+      userStore,
+    );
   });
 }
 
@@ -26,11 +39,16 @@ async function handleUserinfoRequest(
   request: FastifyRequest,
   reply: FastifyReply,
   serverConfig: ServerConfig,
+  grantStore: GrantStore,
   userStore: UserStore,
 ) {
   const token = extractBearerToken(request.headers.authorization);
   if (!token) {
     return sendBearerChallenge(reply);
+  }
+
+  if (grantStore.loadAccessToken(token) == null) {
+    return sendInvalidTokenResponse(reply);
   }
 
   try {

@@ -193,6 +193,11 @@ async function authCodeGrant({
   // Consume the code immediately so every redemption attempt is single-use.
   const authCodeRecord = grantStore.consumeAuthorizationCode(body.code);
   if (authCodeRecord == null) {
+    // If an authorization code is re-used we revoke the corresponding grant and tokens.
+    const grant = grantStore.getGrantByAuthorizationCode(body.code);
+    if (grant?.authorizationCode.usedAt != null) {
+      grantStore.revokeGrant(grant.grantId);
+    }
     return reply.code(400).send({
       error: "invalid_grant",
       error_description: "Unknown, used, or invalidated code",

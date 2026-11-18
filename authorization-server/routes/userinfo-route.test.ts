@@ -4,9 +4,11 @@ import { generateKeyPair, SignJWT } from "jose";
 import type { ServerConfig } from "../config/server-config.ts";
 import { testUserId, janeUserId } from "../default-users.ts";
 import { createServer } from "../server.ts";
+import { createGrantStore } from "../stores/grant-store.ts";
 import { getTestServerConfig } from "../test/test-utils.ts";
 
 const defaultServerConfig = getTestServerConfig();
+const userinfoGrantStore = createGrantStore();
 type UserinfoResponse = Awaited<
   ReturnType<Awaited<ReturnType<typeof createServer>>["inject"]>
 >;
@@ -21,6 +23,18 @@ test("GET /userinfo returns a bearer challenge when authorization is missing", a
 
 test("GET /userinfo rejects malformed bearer tokens", async function () {
   const response = await fetchUserinfo("Bearer not-a-jwt");
+
+  assertInvalidTokenResponse(response);
+});
+
+test("GET /userinfo rejects a valid access token that is not in the grant store", async function () {
+  const accessToken = await signAccessToken({ register: false });
+
+  const response = await fetchUserinfo(
+    `Bearer ${accessToken}`,
+    "GET",
+    createGrantStore(),
+  );
 
   assertInvalidTokenResponse(response);
 });
@@ -146,8 +160,12 @@ test("POST /userinfo returns the subject and name for valid access tokens with p
 async function fetchUserinfo(
   authorizationHeader?: string,
   method: "GET" | "POST" = "GET",
+  grantStore = userinfoGrantStore,
 ): Promise<UserinfoResponse> {
-  const fastify = await createServer({ serverConfig: defaultServerConfig });
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
+    grantStore,
+  });
 
   try {
     return await fastify.inject({
@@ -173,6 +191,7 @@ async function signAccessToken({
   includeSubject = true,
   scope,
   tokenType = "at+jwt",
+  register = true,
 }: {
   serverConfig?: ServerConfig;
   privateKey?: ServerConfig["signingKey"]["privateKey"];
@@ -180,6 +199,7 @@ async function signAccessToken({
   includeSubject?: boolean;
   scope?: string;
   tokenType?: string;
+  register?: boolean;
 } = {}) {
   const nowSeconds = Math.floor(Date.now() / 1000);
   const protectedHeader: {
@@ -209,11 +229,29 @@ async function signAccessToken({
     payload.scope = scope;
   }
 
-  return await new SignJWT(payload)
+  const accessToken = await new SignJWT(payload)
     .setProtectedHeader(protectedHeader)
     .setIssuedAt(nowSeconds)
     .setExpirationTime(nowSeconds + 3600)
     .sign(privateKey);
+
+  if (register) {
+    const grantId = userinfoGrantStore.createAuthorizationCodeGrant(
+      accessToken,
+      {
+        clientId: "userinfo-test-client",
+        subject,
+        authTime: Date.now(),
+        requiresAuthTime: false,
+        amr: [],
+        redirectUri: "http://localhost:3000/callback",
+        expiresAt: Date.now() + 3600_000,
+      },
+    );
+    userinfoGrantStore.saveAccessToken(accessToken, grantId, { type: "jwt" });
+  }
+
+  return accessToken;
 }
 
 function assertInvalidTokenResponse(response: UserinfoResponse) {
