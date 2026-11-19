@@ -212,6 +212,22 @@ test("GET authorization endpoint requires login for prompt=login with an active 
   );
 });
 
+for (const prompt of ["consent", "select_account"] as const) {
+  test(`GET authorization endpoint accepts prompt=${prompt}`, async function () {
+    const response = await fetchAuthorizationLoginPage({
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      prompt,
+    });
+
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert.match(html, /<form method="post"/);
+    assert.match(html, new RegExp(`prompt=${prompt}`));
+  });
+}
+
 test("GET authorization endpoint reuses an active session for prompt=none", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
