@@ -16,7 +16,7 @@ export type AuthorizationRequest = {
   prompt?: Prompt[];
 };
 
-export const prompts = ["none", "login"] as const;
+export const prompts = ["none", "login", "consent", "select_account"] as const;
 export type Prompt = (typeof prompts)[number];
 
 export type AuthorizationRequestError = {
