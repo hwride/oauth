@@ -9,7 +9,8 @@
     "test": "node --test otp/*.test.ts util/*.test.ts",
     "types": "tsc --noEmit",
     "prettier:write": "prettier --write .",
-    "conformance:up": "docker compose -f conformance/docker-compose-prebuilt.yml -f conformance/proxy-compose.yml up --build",
+    "conformance:certs": "node scripts/ensure-conformance-certs.ts",
+    "conformance:up": "npm run conformance:certs && docker compose -f conformance/docker-compose-prebuilt.yml -f conformance/proxy-compose.yml up --build",
     "conformance:down": "docker compose -f conformance/docker-compose-prebuilt.yml -f conformance/proxy-compose.yml down"
   },
   "devDependencies": {

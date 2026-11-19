@@ -1,6 +1,14 @@
 services:
+  nginx:
+    volumes:
+      - ./nginx-auth-server/certs/tls.crt:/etc/ssl/certs/nginx-selfsigned.crt:ro
+      - ./nginx-auth-server/certs/tls.key:/etc/ssl/private/nginx-selfsigned.key:ro
+
   nginx-auth-server:
     build:
       context: ./nginx-auth-server
+    volumes:
+      - ./nginx-auth-server/certs/tls.crt:/etc/nginx/tls.crt:ro
+      - ./nginx-auth-server/certs/tls.key:/etc/nginx/tls.key:ro
     ports:
       - "4443:4443"
