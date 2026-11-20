@@ -170,10 +170,30 @@ test("POST /userinfo returns the subject and name for valid access tokens with p
   });
 });
 
+test("POST /userinfo accepts an access token in the form body", async function () {
+  const accessToken = await signAccessToken({
+    scope: "profile",
+  });
+
+  const response = await fetchUserinfo(
+    undefined,
+    "POST",
+    userinfoGrantStore,
+    { access_token: accessToken },
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), {
+    sub: testUserId,
+    name: "John Smith",
+  });
+});
+
 async function fetchUserinfo(
   authorizationHeader?: string,
   method: "GET" | "POST" = "GET",
   grantStore = userinfoGrantStore,
+  body?: Record<string, string>,
 ): Promise<UserinfoResponse> {
   const fastify = await createServer({
     serverConfig: defaultServerConfig,
@@ -190,7 +210,17 @@ async function fetchUserinfo(
               authorization: authorizationHeader,
             }
           : {}),
+        ...(body
+          ? {
+              "content-type": "application/x-www-form-urlencoded",
+            }
+          : {}),
       },
+      ...(body
+        ? {
+            payload: new URLSearchParams(body).toString(),
+          }
+        : {}),
     });
   } finally {
     await fastify.close();
