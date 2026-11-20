@@ -4,11 +4,13 @@
 
 1. Start Docker Desktop. From the repository root, run these in two terminals:
 1. Boot the conformance suite and our auth server HTTPS proxy: `npm run conformance:up`.
+1. Copy the proxy certificate: `npm run conformance:copy-cert`.
+1. Configure Node to trust the copied certificate: `export NODE_EXTRA_CA_CERTS="$PWD/conformance/tls.crt"`
 1. Boot the server with `npm run dev:conformance`. This loads the HTTPS issuer and listen address from `conformance.env`.
 1. The conformance suite should then be available at <https://localhost.emobix.co.uk:8443>.
 
 > [!NOTE]  
-> Note conformance suite run state is data is persisted in  `./mongo/data`, delete that if you want a fresh site.
+> Note conformance suite run state is data is persisted in `./mongo/data`, delete that if you want a fresh site.
 
 ## Create a test plan
 1. Go to <https://localhost.emobix.co.uk:8443>
