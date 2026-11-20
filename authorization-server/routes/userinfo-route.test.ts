@@ -132,6 +132,19 @@ test("GET /userinfo returns profile claims for the matching user", async functio
   assert.deepEqual(response.json(), {
     sub: janeUserId,
     name: "Jane Smith",
+    family_name: "Smith",
+    given_name: "Jane",
+    middle_name: "Elizabeth",
+    nickname: "Janie",
+    preferred_username: "jane",
+    profile: "https://example.test/users/jane",
+    picture: "https://example.test/images/jane-smith.jpg",
+    website: "https://jane.example.test",
+    gender: "female",
+    birthdate: "1990-01-02",
+    zoneinfo: "Europe/London",
+    locale: "en-GB",
+    updated_at: 1_700_000_000,
   });
 });
 

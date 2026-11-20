@@ -1,5 +1,6 @@
 import type { ServerContext } from "../server-context.ts";
 import type { FastifyInstance } from "fastify";
+import { oidcScopes, oidcStandardClaims } from "../utils/oidc-utils.ts";
 
 export function registerOpenIdConfigurationRoute(
   fastify: FastifyInstance,
@@ -30,11 +31,12 @@ export function registerOpenIdConfigurationRoute(
         // Shared
         "iss",
         "aud",
-        "sub", // Included on ID token and /userinfo endpoint
-        "name", // Included on ID token and /userinfo endpoint
+        "sub",
         "iat",
         "exp",
         "jti",
+        // Included on ID token and /userinfo endpoint
+        ...oidcStandardClaims,
         // ID token only
         "amr",
         "nonce",
@@ -45,7 +47,7 @@ export function registerOpenIdConfigurationRoute(
       claims_parameter_supported: false,
       request_parameter_supported: false,
       // Note at the moment we only advertise the OpenID Connect scopes, not any of our custom ones like orders:read.
-      scopes_supported: ["openid", "profile", "offline_access"],
+      scopes_supported: [...oidcScopes, "offline_access"],
     });
   });
 }

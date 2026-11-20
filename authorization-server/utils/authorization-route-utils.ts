@@ -9,10 +9,11 @@ import type { UserRecord } from "../stores/user-store.ts";
 import type { AuthorizationRequest } from "../types/authorization-request.ts";
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
 import { getAllowedScopesForUser } from "./rbac-utils.ts";
+import { openidScope } from "./oidc-utils.ts";
 
 /** These are scopes that are always allowed. */
 const unrestrictedScopes = new Set([
-  "openid",
+  openidScope,
   "profile",
   "email",
   "address",
