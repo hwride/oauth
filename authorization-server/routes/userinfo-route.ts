@@ -43,7 +43,10 @@ async function handleUserinfoRequest(
   grantStore: GrantStore,
   userStore: UserStore,
 ) {
-  const token = extractBearerToken(request.headers.authorization);
+  const token =
+    request.headers.authorization != null
+      ? extractBearerToken(request.headers.authorization)
+      : extractFormBodyAccessToken(request);
   if (!token) {
     return sendBearerChallenge(reply);
   }
@@ -85,6 +88,11 @@ async function handleUserinfoRequest(
   }
 }
 
+/**
+ * Extract access token from Bearer Authorization header.
+ *
+ * https://www.rfc-editor.org/info/rfc6750/#section-2.1
+ */
 function extractBearerToken(
   authorizationHeader: string | undefined,
 ): string | undefined {
@@ -98,6 +106,33 @@ function extractBearerToken(
   }
 
   return token;
+}
+
+/**
+ * Extract access token from x-www-form-urlencoded body.
+ *
+ * https://www.rfc-editor.org/info/rfc6750/#section-2.2
+ */
+function extractFormBodyAccessToken(
+  request: FastifyRequest,
+): string | undefined {
+  if (
+    request.method !== "POST" ||
+    request.headers["content-type"]?.split(";", 1)[0] !==
+      "application/x-www-form-urlencoded"
+  ) {
+    return undefined;
+  }
+
+  const body = request.body;
+  if (body == null || typeof body !== "object" || Array.isArray(body)) {
+    return undefined;
+  }
+
+  const accessToken = (body as Record<string, unknown>).access_token;
+  return typeof accessToken === "string" && accessToken.length > 0
+    ? accessToken
+    : undefined;
 }
 
 function sendBearerChallenge(reply: FastifyReply) {
