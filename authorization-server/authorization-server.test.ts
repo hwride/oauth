@@ -664,7 +664,7 @@ test("authorization code flow supports PKCE and state together", async function 
   }
 });
 
-test("OIDC authorization code flow with nonce", async function () {
+test("OIDC authorization code flow with nonce and email claims", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const tokenStore = authorizationCodeStore;
   const fastify = await createServer({
@@ -684,7 +684,7 @@ test("OIDC authorization code flow with nonce", async function () {
       "client-id-jwt",
       {
         authorizationRequest: {
-          scope: "openid profile",
+          scope: "openid profile email",
           nonce,
         },
       },
@@ -698,7 +698,7 @@ test("OIDC authorization code flow with nonce", async function () {
 
     const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
     assert.notEqual(codeRecord, undefined);
-    assert.equal(codeRecord.scope, "openid profile");
+    assert.equal(codeRecord.scope, "openid profile email");
     assert.equal(codeRecord.nonce, nonce);
 
     const tokenResponse = await fetchTokenEndpoint(
@@ -717,7 +717,7 @@ test("OIDC authorization code flow with nonce", async function () {
     };
 
     assert.equal(tokenResponseBody.token_type, "Bearer");
-    assert.equal(tokenResponseBody.scope, "openid profile");
+    assert.equal(tokenResponseBody.scope, "openid profile email");
     assert.equal(typeof tokenResponseBody.access_token, "string");
     assert.notEqual(tokenResponseBody.access_token.length, 0);
     assert.equal(typeof tokenResponseBody.id_token, "string");
@@ -741,7 +741,7 @@ test("OIDC authorization code flow with nonce", async function () {
     assert.equal(verifiedAccessToken.payload.aud, defaultServerConfig.issuer);
     assert.equal(verifiedAccessToken.payload.sub, janeUserId);
     assert.equal(verifiedAccessToken.payload.client_id, "client-id-jwt");
-    assert.equal(verifiedAccessToken.payload.scope, "openid profile");
+    assert.equal(verifiedAccessToken.payload.scope, "openid profile email");
     assert.equal(typeof verifiedAccessToken.payload.jti, "string");
     assert.notEqual(verifiedAccessToken.payload.jti.length, 0);
     assert.equal(typeof verifiedAccessToken.payload.iat, "number");
@@ -760,7 +760,9 @@ test("OIDC authorization code flow with nonce", async function () {
     assert.equal(verifiedIdToken.payload.iss, defaultServerConfig.issuer);
     assert.equal(verifiedIdToken.payload.aud, "client-id-jwt");
     assert.equal(verifiedIdToken.payload.sub, janeUserId);
-    assert.equal(verifiedIdToken.payload.name, "Jane Smith");
+    assert.equal(verifiedIdToken.payload.name, undefined);
+    assert.equal(verifiedIdToken.payload.email, undefined);
+    assert.equal(verifiedIdToken.payload.email_verified, undefined);
     assert.equal(verifiedIdToken.payload.nonce, nonce);
     // auth_time is omitted when max_age was not requested.
     assert.equal(verifiedIdToken.payload.auth_time, undefined);
@@ -778,6 +780,21 @@ test("OIDC authorization code flow with nonce", async function () {
     assert.deepEqual(await userinfoResponse.json(), {
       sub: janeUserId,
       name: "Jane Smith",
+      email: "jane@example.test",
+      email_verified: true,
+      family_name: "Smith",
+      given_name: "Jane",
+      middle_name: "Elizabeth",
+      nickname: "Janie",
+      preferred_username: "jane",
+      profile: "https://example.test/users/jane",
+      picture: "https://example.test/images/jane-smith.jpg",
+      website: "https://jane.example.test",
+      gender: "female",
+      birthdate: "1990-01-02",
+      zoneinfo: "Europe/London",
+      locale: "en-GB",
+      updated_at: 1_700_000_000,
     });
 
     assert.equal(authorizationCodeStore.hasAuthorizationCode(code), false);

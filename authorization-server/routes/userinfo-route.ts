@@ -4,6 +4,7 @@ import { jwtVerify } from "jose";
 import type { ServerConfig } from "../config/server-config.ts";
 import type { GrantStore } from "../stores/grant-store.ts";
 import type { UserStore } from "../stores/user-store.ts";
+import { getUserClaims } from "../utils/oidc-utils.ts";
 
 const bearerChallenge = `Bearer realm="userinfo"`;
 
@@ -73,14 +74,10 @@ async function handleUserinfoRequest(
       return sendInvalidTokenResponse(reply);
     }
 
-    const response: { sub: string; name?: string } = {
+    const response = {
       sub: user.userId,
+      ...getUserClaims(user, payload.scope),
     };
-
-    // https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims
-    if (hasScope(payload.scope, "profile")) {
-      response.name = user.name;
-    }
 
     return reply.code(200).send(response);
   } catch {
@@ -114,10 +111,4 @@ function sendInvalidTokenResponse(reply: FastifyReply) {
     .send({
       error: "invalid_token",
     });
-}
-
-function hasScope(scope: unknown, expectedScope: string) {
-  return (
-    typeof scope === "string" && scope.split(/\s+/).includes(expectedScope)
-  );
 }

@@ -762,7 +762,7 @@ test("POST token endpoint returns an ID token when scope includes openid token",
   assert.notEqual(verified.payload.jti.length, 0);
 });
 
-test("POST token endpoint includes name in ID token when scope includes profile", async function () {
+test("POST token endpoint does not include profile claims in ID token", async function () {
   const userStore = createUserStore([
     {
       userId: "test-user-id",
@@ -811,7 +811,7 @@ test("POST token endpoint includes name in ID token when scope includes profile"
   );
 
   assert.equal(verified.payload.sub, testUser.userId);
-  assert.equal(verified.payload.name, "Test User");
+  assert.equal(verified.payload.name, undefined);
 });
 
 test("POST token endpoint includes nonce in ID token when present on auth code", async function () {

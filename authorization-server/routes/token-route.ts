@@ -5,8 +5,9 @@ import { type JWTPayload, SignJWT } from "jose";
 import { type ClientConfig, clientsConfig } from "../config/clients-config.ts";
 import type { ServerConfig } from "../config/server-config.ts";
 import type { AccessTokenRecord, GrantStore } from "../stores/grant-store.ts";
-import type { UserStore } from "../stores/user-store.ts";
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
+import { hasOpenIdScope } from "../utils/oidc-utils.ts";
+import { hasScope } from "../utils/oauth-utils.ts";
 
 type TokenRequestBody = {
   grant_type?: string;
@@ -51,7 +52,7 @@ type RefreshTokenGrantResponse = {
  */
 export function registerTokenRoute(
   fastify: FastifyInstance,
-  { serverConfig, grantStore, userStore }: ServerContext,
+  { serverConfig, grantStore }: ServerContext,
 ) {
   const tokenEndpointPath = new URL(serverConfig.tokenEndpoint).pathname;
 
@@ -149,7 +150,6 @@ export function registerTokenRoute(
         serverConfig,
         clientConfig,
         grantStore,
-        userStore,
       });
     } else if (request.body.grant_type === "refresh_token") {
       return await refreshTokenGrant({
@@ -158,7 +158,6 @@ export function registerTokenRoute(
         serverConfig,
         clientConfig,
         grantStore,
-        userStore,
       });
     } else {
       return reply.code(400).send({
@@ -174,14 +173,12 @@ async function authCodeGrant({
   serverConfig,
   clientConfig,
   grantStore,
-  userStore,
 }: {
   body: TokenRequestBody;
   reply: FastifyReply;
   serverConfig: ServerConfig;
   clientConfig: ClientConfig;
   grantStore: GrantStore;
-  userStore: UserStore;
 }) {
   if (!body.code) {
     return reply.code(400).send({
@@ -285,10 +282,8 @@ async function authCodeGrant({
     response.id_token = await generateIdToken({
       serverConfig,
       clientConfig,
-      scope: authCodeRecord.scope,
       subject: authCodeRecord.subject,
       nonce: authCodeRecord.nonce,
-      userStore,
       amr: authCodeRecord.amr,
       authTime,
     });
@@ -327,14 +322,12 @@ async function refreshTokenGrant({
   serverConfig,
   clientConfig,
   grantStore,
-  userStore,
 }: {
   body: TokenRequestBody;
   reply: FastifyReply;
   serverConfig: ServerConfig;
   clientConfig: ClientConfig;
   grantStore: GrantStore;
-  userStore: UserStore;
 }) {
   if (!body.refresh_token) {
     return reply.code(400).send({
@@ -404,8 +397,6 @@ async function refreshTokenGrant({
     response.id_token = await generateIdToken({
       serverConfig,
       clientConfig,
-      userStore,
-      scope: refreshRecord.scope,
       subject: refreshRecord.subject,
       amr: refreshRecord.amr,
       // no nonce on refresh requests
@@ -539,8 +530,6 @@ async function generateAccessToken({
 async function generateIdToken({
   serverConfig,
   clientConfig,
-  userStore,
-  scope,
   subject,
   nonce,
   amr,
@@ -548,8 +537,6 @@ async function generateIdToken({
 }: {
   serverConfig: ServerConfig;
   clientConfig: ClientConfig;
-  userStore: UserStore;
-  scope?: string;
   subject: string;
   nonce?: string;
   amr?: AuthenticationMethodReference[];
@@ -573,13 +560,8 @@ async function generateIdToken({
     idTokenPayload.auth_time = authTime;
   }
 
-  // https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims
-  if (hasScope(scope, "profile")) {
-    const user = userStore.loadUserById(subject);
-    if (user != null) {
-      idTokenPayload.name = user.name;
-    }
-  }
+  // We don't copy OIDC standard claims to ID token if issuing an access token.
+  // See https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims
 
   const nowSeconds = getNowSeconds();
   return await new SignJWT(idTokenPayload)
@@ -607,14 +589,6 @@ function getAccessTokenAudience(
 
 function getNowSeconds() {
   return Math.floor(Date.now() / 1000);
-}
-
-function hasOpenIdScope(scope: string | undefined) {
-  return hasScope(scope, "openid");
-}
-
-function hasScope(scope: string | undefined, expectedScope: string) {
-  return scope?.split(/\s+/).includes(expectedScope) ?? false;
 }
 
 /**
