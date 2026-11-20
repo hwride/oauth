@@ -460,7 +460,7 @@ function renderLoginPage(
   errorMessage?: string,
 ) {
   const escapedErrorMessage = errorMessage
-    ? `<p>${escapeHtml(errorMessage)}</p>`
+    ? `<p role="alert" style="color: red">${escapeHtml(errorMessage)}</p>`
     : "";
   const signupPathSearchParams = new URLSearchParams({
     client_id: authorizationRequest.clientId,

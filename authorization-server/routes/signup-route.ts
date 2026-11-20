@@ -137,7 +137,7 @@ function renderSignupPage({
   errorMessage?: string;
 }) {
   const escapedErrorMessage = errorMessage
-    ? `<p>${escapeHtml(errorMessage)}</p>`
+    ? `<p role="alert" style="color: red">${escapeHtml(errorMessage)}</p>`
     : "";
 
   return `<!doctype html>
