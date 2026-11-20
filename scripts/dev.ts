@@ -9,12 +9,17 @@ import {
   main as startResourceServer,
 } from "../resource-server/resource-server.ts";
 
+const authServerDiscoveryTimeoutMs = 20_000;
+
 async function main() {
   // Auth server
   const authorizationServerPort = Number(
     process.env.AUTH_SERVER_PORT ?? defaultAuthorizationServerPort,
   );
-  const authServerBase = `http://localhost:${authorizationServerPort}`;
+  const authServerBase =
+    process.env.AUTH_SERVER_BASE ??
+    `http://localhost:${authorizationServerPort}`;
+  const localAuthServerBase = `http://localhost:${authorizationServerPort}`;
   process.env.CLIENT_JWT_BASE ??= "http://localhost:3000";
   process.env.CLIENT_OPAQUE_BASE ??= "http://localhost:3001";
   process.env.AUTH_SERVER_PORT = String(authorizationServerPort);
@@ -42,7 +47,7 @@ async function main() {
   await startAuthorizationServer();
 
   console.log("Waiting for authorization server...");
-  await waitForAuthServerDiscovery();
+  await waitForAuthServerDiscovery(localAuthServerBase);
 
   console.log("Starting resource server...");
   await startResourceServer();
@@ -50,21 +55,37 @@ async function main() {
   await startClient();
 }
 
-async function waitForAuthServerDiscovery() {
+async function waitForAuthServerDiscovery(authServerBase: string) {
   const authServerDiscoveryUrl = new URL(
     "/.well-known/openid-configuration",
-    process.env.AUTH_SERVER_BASE,
+    authServerBase,
   );
-  while (true) {
+  const timeoutAt = Date.now() + authServerDiscoveryTimeoutMs;
+  let lastError: unknown;
+
+  while (Date.now() < timeoutAt) {
+    const remainingMs = timeoutAt - Date.now();
     try {
-      const response = await fetch(authServerDiscoveryUrl);
+      const response = await fetch(authServerDiscoveryUrl, {
+        signal: AbortSignal.timeout(Math.min(1000, remainingMs)),
+      });
       if (response.status === 200) {
         return;
       }
-    } catch {}
+      lastError = new Error(
+        `Discovery endpoint returned HTTP ${response.status}`,
+      );
+    } catch (error) {
+      lastError = error;
+    }
 
     await sleep(100);
   }
+
+  throw new Error(
+    `Timed out waiting ${authServerDiscoveryTimeoutMs}ms for ${authServerDiscoveryUrl}`,
+    { cause: lastError },
+  );
 }
 
 await main();

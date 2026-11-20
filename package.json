@@ -10,6 +10,7 @@
     "types": "tsc --noEmit",
     "prettier:write": "prettier --write .",
     "conformance:up": "docker compose -f conformance/docker-compose-prebuilt.yml -f conformance/proxy-compose.yml up --build",
+    "conformance:copy-cert": "node scripts/copy-conformance-cert.ts",
     "conformance:down": "docker compose -f conformance/docker-compose-prebuilt.yml -f conformance/proxy-compose.yml down"
   },
   "devDependencies": {
