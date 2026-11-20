@@ -54,14 +54,32 @@ export function registerCallbackRoute(
       });
     }
 
-    const tokenResponse = await makeTokenRequest({
-      code: validationResult.code,
-      authFlowContext,
-      clientId: process.env.CLIENT_ID,
-      clientSecret: process.env.CLIENT_SECRET,
-      clientAuthMethod: parseClientAuthMethod(process.env.CLIENT_AUTH_METHOD),
-      log: fastify.log,
-    });
+    let tokenResponse: Response;
+    try {
+      tokenResponse = await makeTokenRequest({
+        code: validationResult.code,
+        authFlowContext,
+        clientId: process.env.CLIENT_ID,
+        clientSecret: process.env.CLIENT_SECRET,
+        clientAuthMethod: parseClientAuthMethod(
+          process.env.CLIENT_AUTH_METHOD,
+        ),
+        log: fastify.log,
+      });
+    } catch (error) {
+      request.log.error(
+        { err: error },
+        "/callback - Access Token Request failed",
+      );
+      return renderCallbackFailure(reply, 502, {
+        ...callbackViewProps,
+        errorMessage: "Token request failed",
+        tokenResponseJson:
+          error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : String(error),
+      });
+    }
 
     const tokenResponseResult = await handleTokenResponse({
       tokenResponse,

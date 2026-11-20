@@ -59,7 +59,7 @@ export async function createServer(overrides: Partial<ServerContext> = {}) {
     if (error.statusCode == null || error.statusCode >= 500) {
       request.log.error({ err: error }, "Unhandled request error");
     }
-    return this.errorHandler(error, request, reply);
+    return reply.send(error);
   });
 
   logAuthorizationServerConfig(fastify, context.serverConfig);
