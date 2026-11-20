@@ -67,6 +67,18 @@ export async function createServer() {
     disableRequestLogging: true,
   });
 
+  fastify.setErrorHandler(function (
+    error: Error & { statusCode?: number },
+    request,
+    reply,
+  ) {
+    // Keep expected client errors quiet while surfacing server-side failures.
+    if (error.statusCode == null || error.statusCode >= 500) {
+      request.log.error({ err: error }, "Unhandled request error");
+    }
+    return reply.send(error);
+  });
+
   logClientConfig(fastify);
 
   await fastify.register(formbody);
