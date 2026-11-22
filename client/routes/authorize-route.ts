@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { AuthFlowContext } from "./auth-flow-context.ts";
+import { escapeHtml } from "../utils/html-utils.ts";
 
 export function registerAuthorizeRoute(
   fastify: FastifyInstance,
@@ -21,6 +22,7 @@ export function registerAuthorizeRoute(
       use_pkce?: "true" | "false";
       use_state?: "true" | "false";
       use_nonce?: "true" | "false";
+      authorize_request_method?: "GET" | "POST";
     };
   }>("/authorize", async function (request, reply) {
     const clientId = process.env.CLIENT_ID;
@@ -36,10 +38,13 @@ export function registerAuthorizeRoute(
       use_pkce,
       use_state,
       use_nonce,
+      authorize_request_method,
     } = request.query;
+    const authorizeRequestMethod =
+      authorize_request_method === "POST" ? "POST" : "GET";
 
     const authorizeUrl = new URL(authFlowContext.authorizationEndpoint);
-    const authorizeQueryParams: Record<string, string> = {
+    const authorizeParams: Record<string, string> = {
       response_type: "code",
       client_id: clientId,
       redirect_uri: authFlowContext.redirectUri,
@@ -47,7 +52,7 @@ export function registerAuthorizeRoute(
 
     if (use_state === "true") {
       authFlowContext.state = randomUUID();
-      authorizeQueryParams.state = authFlowContext.state;
+      authorizeParams.state = authFlowContext.state;
     } else {
       authFlowContext.state = undefined;
     }
@@ -55,7 +60,7 @@ export function registerAuthorizeRoute(
     if (use_nonce === "true") {
       // OIDC, ID token - https:openid.net/specs/openid-connect-core-1_0-final.html#IDToken
       authFlowContext.nonce = randomUUID();
-      authorizeQueryParams.nonce = authFlowContext.nonce;
+      authorizeParams.nonce = authFlowContext.nonce;
     } else {
       authFlowContext.nonce = undefined;
     }
@@ -64,8 +69,8 @@ export function registerAuthorizeRoute(
       // PKCE, Client Creates a Code Verifier - https://datatracker.ietf.org/doc/html/rfc7636#section-4.1
       authFlowContext.codeVerifier = randomBytes(32).toString("base64url");
       // PKCE, Client Creates a Code Challenge - https://datatracker.ietf.org/doc/html/rfc7636#section-4.2
-      authorizeQueryParams.code_challenge_method = "S256";
-      authorizeQueryParams.code_challenge = createHash("sha256")
+      authorizeParams.code_challenge_method = "S256";
+      authorizeParams.code_challenge = createHash("sha256")
         .update(authFlowContext.codeVerifier)
         .digest("base64url");
     } else {
@@ -74,41 +79,59 @@ export function registerAuthorizeRoute(
 
     if (scope) {
       const trimmedScope = scope.trim();
-      authorizeQueryParams.scope = trimmedScope;
+      authorizeParams.scope = trimmedScope;
       authFlowContext.isOidcFlow = trimmedScope.split(/\s+/).includes("openid");
     } else {
       authFlowContext.isOidcFlow = false;
     }
     if (resource) {
-      authorizeQueryParams.resource = resource.trim();
+      authorizeParams.resource = resource.trim();
     }
     if (audience) {
-      authorizeQueryParams.audience = audience.trim();
+      authorizeParams.audience = audience.trim();
     }
     if (max_age) {
       const parsedMaxAge = parseMaxAge(max_age);
       authFlowContext.maxAge = parsedMaxAge;
-      authorizeQueryParams.max_age = max_age.trim();
+      authorizeParams.max_age = max_age.trim();
     } else {
       authFlowContext.maxAge = undefined;
     }
     if (prompt) {
-      authorizeQueryParams.prompt = prompt;
+      authorizeParams.prompt = prompt;
     }
     if (display) {
-      authorizeQueryParams.display = display;
+      authorizeParams.display = display;
     }
     if (ui_locales) {
-      authorizeQueryParams.ui_locales = ui_locales;
+      authorizeParams.ui_locales = ui_locales;
     }
     if (login_hint?.trim()) {
-      authorizeQueryParams.login_hint = login_hint.trim();
+      authorizeParams.login_hint = login_hint.trim();
     }
 
-    authorizeUrl.search = new URLSearchParams(authorizeQueryParams).toString();
+    // If the user wants to use POST to the auth server's /authorize endpoint.
+    // We send them back an auto-submitting form with our constructed authorization params.
+    if (authorizeRequestMethod === "POST") {
+      fastify.log.info(
+        {
+          authorizeRequestMethod,
+          authorizationEndpoint: authorizeUrl,
+          ...authorizeParams,
+        },
+        "/authorize - Authorization Request - POSTing to Authorization URL...",
+      );
+      return reply
+        .type("text/html; charset=utf-8")
+        .send(
+          renderAuthorizationPostForm(authorizeUrl.toString(), authorizeParams),
+        );
+    }
 
+    authorizeUrl.search = new URLSearchParams(authorizeParams).toString();
     fastify.log.info(
       {
+        authorizeRequestMethod,
         authorizeUrl,
         ...Object.fromEntries(authorizeUrl.searchParams.entries()),
       },
@@ -130,4 +153,33 @@ function parseMaxAge(maxAgeValue: string): number | undefined {
   }
 
   return parsed;
+}
+
+function renderAuthorizationPostForm(
+  authorizationEndpoint: string,
+  authorizationParams: Record<string, string>,
+) {
+  const hiddenInputs = Object.entries(authorizationParams)
+    .map(
+      ([name, value]) =>
+        `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`,
+    )
+    .join("\n      ");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Submitting authorization request</title>
+  </head>
+  <body>
+    <form method="post" action="${escapeHtml(authorizationEndpoint)}">
+      ${hiddenInputs}
+      <noscript>
+        <button type="submit">Continue</button>
+      </noscript>
+    </form>
+    <script>document.forms[0].submit();</script>
+  </body>
+</html>`;
 }
