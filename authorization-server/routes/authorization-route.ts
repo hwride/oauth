@@ -109,7 +109,9 @@ export function registerAuthorizationRoute(
    * POST /authorize endpoint.
    *
    * This is the POST version of submitting an authorization request. It creates a login transaction when user
-   * authentication is required. See https://openid.net/specs/openid-connect-core-1_0-35.html#rfc.section.3.1.2.1.
+   * authentication is required. See
+   * - https://openid.net/specs/openid-connect-core-1_0.html#TokenRequest
+   * - https://openid.net/specs/openid-connect-core-1_0.html#FormSerialization
    */
   fastify.post<{
     Body: AuthorizeParams;
