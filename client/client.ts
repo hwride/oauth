@@ -117,8 +117,15 @@ async function initAuthFlowContext({
   if (!authServerBase) {
     throw new Error("Missing AUTH_SERVER_BASE");
   }
+  const clientId = process.env.CLIENT_ID;
+  if (!clientId) {
+    throw new Error("Missing CLIENT_ID");
+  }
 
   const discovery = await authServerDiscovery(authServerBase, fastify.log);
+  if (!discovery.jwksUri) {
+    throw new Error("Missing JWKS URI from discovery.");
+  }
 
   return {
     authServerBaseUrl: authServerBase,
