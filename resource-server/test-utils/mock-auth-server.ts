@@ -36,7 +36,7 @@ export async function createMockAuthServer(
         .setProtectedHeader({ alg: signingAlg, kid })
         .setIssuer(payload.iss ?? issuer)
         .setIssuedAt(now)
-        .setAudience(payload.aud)
+        .setAudience(payload.aud ?? "")
         .setNotBefore(payload.nbf ?? now - 5)
         .setExpirationTime(payload.exp ?? now + 60)
         .sign(keyPair.privateKey);
