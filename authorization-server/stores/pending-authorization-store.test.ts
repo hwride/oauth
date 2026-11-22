@@ -20,8 +20,8 @@ test("pending authorization store updates a record when its stage matches", () =
   const loginRecord = {
     ...createRecord(),
     stage: "login" as const,
-    userId: undefined,
-    amr: [],
+    userId: undefined as string | undefined,
+    amr: [] as PendingAuthorizationRecord["amr"],
   };
   const transactionId = store.newPendingAuthorization(loginRecord);
   const updatedRecord = {

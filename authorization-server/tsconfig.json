@@ -4,6 +4,9 @@
     "module": "nodenext",
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "strictNullChecks": false,
+    "useUnknownInCatchVariables": false
   }
 }
