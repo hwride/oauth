@@ -287,6 +287,13 @@
           />
         </label>
       </fieldset>
+      <label>
+        Authorization request method
+        <select id="authorize-request-method-select">
+          <option value="GET" selected>GET</option>
+          <option value="POST">POST</option>
+        </select>
+      </label>
       <a id="authorize-link" href="/authorize">Authorize</a>
     </div>
 
@@ -395,6 +402,9 @@
       };
 
       const authorizeLink = document.getElementById("authorize-link");
+      const authorizeRequestMethodSelect = document.getElementById(
+        "authorize-request-method-select",
+      );
       const resourceRequest = {
         form: document.getElementById("resource-request-form"),
         result: document.getElementById("resource-request-result"),
@@ -440,6 +450,10 @@
 
       function updateAuthorizeLink() {
         const queryParams = new URLSearchParams();
+
+        if (authorizeRequestMethodSelect.value === "POST") {
+          queryParams.set("authorize_request_method", "POST");
+        }
 
         if (oauth.stateCheckbox.checked) {
           queryParams.set("use_state", "true");
@@ -668,12 +682,20 @@
         );
       }
 
+      function bindAuthorizeRequestMethodListener() {
+        authorizeRequestMethodSelect.addEventListener(
+          "change",
+          updateAuthorizeLink,
+        );
+      }
+
       function bindResourceRequestListener() {
         resourceRequest.form.addEventListener("submit", submitResourceRequest);
       }
 
       bindOAuthListeners();
       bindOidcListeners();
+      bindAuthorizeRequestMethodListener();
       bindResourceRequestListener();
 
       applyDefaultScopes();

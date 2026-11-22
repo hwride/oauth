@@ -56,6 +56,37 @@ test("GET authorization endpoint renders a login form for a valid request", asyn
   );
 });
 
+test("POST authorization request completes login and redirects with an authorization code", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const response = await submitAuthorizationLogin(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      state: "state-value-123",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    undefined,
+    undefined,
+    undefined,
+    "POST",
+  );
+
+  assert.equal(response.status, 302);
+  const redirectUrl = getRedirectUrl(response);
+  assert.equal(redirectUrl.origin, "http://localhost:3000");
+  assert.equal(redirectUrl.pathname, "/callback");
+  assert.equal(redirectUrl.searchParams.get("state"), "state-value-123");
+  assert.notEqual(redirectUrl.searchParams.get("code"), null);
+  assert.equal(
+    authorizationCodeStore.loadAuthorizationCode(
+      redirectUrl.searchParams.get("code"),
+    ).subject,
+    janeUserId,
+  );
+});
+
 test("GET authorization endpoint clears an invalid session cookie before showing login", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const sessionStore = createSessionStore({ sessionLengthSeconds: -1 });
@@ -1096,6 +1127,7 @@ async function submitAuthorizationLogin(
   },
   userStore: UserStore = createUserStore(defaultUsers()),
   pendingAuthorizationStore: PendingAuthorizationStore = createPendingAuthorizationStore(),
+  initialRequestMethod: "GET" | "POST" = "GET",
 ) {
   const fastify = await createServer({
     serverConfig,
@@ -1111,10 +1143,22 @@ async function submitAuthorizationLogin(
   try {
     const authorizationPath = new URL(serverConfig.authorizationEndpoint)
       .pathname;
-    const loginPage = await fetch(
-      `${address}${authorizationPath}?${new URLSearchParams(formData)}`,
-      { redirect: "manual" },
-    );
+    const requestUrl =
+      initialRequestMethod === "GET"
+        ? `${address}${authorizationPath}?${new URLSearchParams(formData)}`
+        : `${address}${authorizationPath}`;
+    const loginPage = await fetch(requestUrl, {
+      method: initialRequestMethod,
+      headers:
+        initialRequestMethod === "POST"
+          ? { "content-type": "application/x-www-form-urlencoded" }
+          : undefined,
+      body:
+        initialRequestMethod === "POST"
+          ? new URLSearchParams(formData).toString()
+          : undefined,
+      redirect: "manual",
+    });
     if (loginPage.status !== 200) return loginPage;
     const action = (await loginPage.text()).match(
       /<form method="post" action="([^"]+)"/,
