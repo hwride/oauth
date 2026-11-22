@@ -21,20 +21,26 @@ Here are a list of some relevant OAuth specifications for this project.
 - (2023-09) [RFC 9470 OAuth 2.0 Step Up Authentication Challenge Protocol](https://datatracker.ietf.org/doc/html/rfc9470)
 - (2023-09) [RFC 9449 OAuth 2.0 Demonstrating Proof of Possession (DPoP)](https://datatracker.ietf.org/doc/html/rfc9449)
 - (2025-01) [RFC 9700 Best Current Practice for OAuth 2.0 Security](https://datatracker.ietf.org/doc/html/rfc9700)
+- (2026-08) [RFC 10017 OAuth 2.0 for Browser-Based Applications](https://datatracker.ietf.org/doc/html/rfc10017)
 
-## OpenID Connect
+## OIDC - OpenID Connect
 - (2014-02) [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
 - (2014-02) [OpenID Connect Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html)
 - (2022-09) [OpenID Connect Session Management 1.0](https://openid.net/specs/openid-connect-session-1_0.html). Uses a hidden iframe to monitor login state. Browser 
   restrictions on third-party cookies and storage can make cross-site monitoring unreliable.
 - (2022-09) [OpenID Connect RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)
-## JWT / JOSE
+
+## FAPI - Financial-grade API
+- (2025-02) [Financial-grade API (FAPI) 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html)
+- (2025-02) [Financial-grade API (FAPI) 2.0 Attacker Model](https://openid.net/specs/fapi-attacker-model-2_0-final.html)
+
+## JWT / JOSE - JSON Web Token / JSON Object Signing and Encryption
 - (2015-05) [RFC 7519 JSON Web Token (JWT)](https://datatracker.ietf.org/doc/html/rfc7519)
 - (2015-05) [RFC 7515 JSON Web Signature (JWS)](https://datatracker.ietf.org/doc/html/rfc7515)
 - (2015-05) [RFC 7517 JSON Web Key (JWK)](https://datatracker.ietf.org/doc/html/rfc7517)
 - (2020-02) [RFC 8725 JSON Web Token Best Current Practices](https://datatracker.ietf.org/doc/html/rfc8725)
 
-## OTP
+## OTP - One-Time Password
 - (2005-12) [HOTP: An HMAC-Based One-Time Password Algorithm](https://www.rfc-editor.org/info/rfc4226/)
 - (2011-05) [TOTP: Time-Based One-Time Password Algorithm](https://www.rfc-editor.org/info/rfc6238/)
 - [Google Authenticator Key URI Format (otpauth://)](https://github.com/google/google-authenticator/wiki/Key-Uri-Format) (de facto format, not an RFC)
