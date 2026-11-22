@@ -153,7 +153,7 @@ export function registerMfaChallengeTotpRoute(
     }
 
     // Validate the given code.
-    const { isValid } = await totpValidator.validate(request.body.code);
+    const { isValid } = await totpValidator.validate(request.body.code ?? "");
 
     if (!isValid) {
       const updateResult = pendingAuthorizationStore.updatePendingAuthorization(

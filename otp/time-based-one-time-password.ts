@@ -107,15 +107,16 @@ export function createTimeBasedOneTimePasswordValidator(
 ): TotpValidator {
   // Defaults
   const allowedTimeSteps = options.allowedTimeSteps ?? defaultAllowedTimeSteps;
+  const timeStepSeconds = options.timeStepSeconds ?? defaultTimeStepSeconds;
   const optionsGenCode: TotpOptionsCode = {
     ...options,
-    timeStepSeconds: options.timeStepSeconds ?? defaultTimeStepSeconds,
+    timeStepSeconds,
   };
 
   // Validation.
   if (
     !Number.isInteger(optionsGenCode.timeStepSeconds) ||
-    optionsGenCode.timeStepSeconds < 1
+    timeStepSeconds < 1
   ) {
     throw new Error("Invalid value for timeStepSeconds, must be > 0");
   }
@@ -151,8 +152,7 @@ export function createTimeBasedOneTimePasswordValidator(
       for (let timeStep = -allowedTimeSteps + 1; timeStep <= 0; timeStep += 1) {
         // Calculate time for this step.
         // Do calculation in Unix time to avoid any DST weirdness using Date.setSeconds
-        const stepUnixTime =
-          baseUnixTime + optionsGenCode.timeStepSeconds * timeStep;
+        const stepUnixTime = baseUnixTime + timeStepSeconds * timeStep;
         const stepUnixTimeDate = fromUnixTime(stepUnixTime);
 
         // Get the code for this step.
@@ -171,7 +171,7 @@ export function createTimeBasedOneTimePasswordValidator(
         // we don't want to block use for the other time value.
         const timeStepNum = calculateTimeStepNumber(
           stepUnixTime,
-          optionsGenCode.timeStepSeconds,
+          timeStepSeconds,
         );
         const codeStoreKey = `${timeStepNum}:${code}`;
         const codeStoreCheckResult = await codeStore.check({

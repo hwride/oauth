@@ -18,16 +18,23 @@ export function loadSessionFromCookie(
   | { ok: false; error: "session-not-found"; sessionIdWasPresent: boolean }
   | { ok: false; error: "user-not-found"; sessionIdWasPresent: boolean } {
   const sessionId = request.cookies[sessionCookieName];
-  const sessionIdWasPresent = sessionId != null;
-  const session = sessionId ? sessionStore.loadSession(sessionId) : undefined;
+  if (sessionId == null) {
+    return {
+      ok: false,
+      error: "session-not-found",
+      sessionIdWasPresent: false,
+    };
+  }
+
+  const session = sessionStore.loadSession(sessionId);
   if (session == null) {
-    return { ok: false, error: "session-not-found", sessionIdWasPresent };
+    return { ok: false, error: "session-not-found", sessionIdWasPresent: true };
   }
 
   const user = userStore.loadUserById(session.userId);
   if (user == null) {
     sessionStore.deleteSession(sessionId); // Clear the invalid session.
-    return { ok: false, error: "user-not-found", sessionIdWasPresent };
+    return { ok: false, error: "user-not-found", sessionIdWasPresent: true };
   }
 
   return { ok: true, session, user };

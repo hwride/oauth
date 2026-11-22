@@ -6,7 +6,6 @@
     "rewriteRelativeImportExtensions": true,
     "verbatimModuleSyntax": true,
     "strict": true,
-    "strictNullChecks": false,
     "useUnknownInCatchVariables": false
   }
 }

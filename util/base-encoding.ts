@@ -353,7 +353,12 @@ export function fromBaseGeneric(
         maxRealBits - (charsInGroup - 1) * opts.charBitLength;
       const finalCharBinaryStr =
         currentGroupBinaryStrs[currentGroupBinaryStrs.length - 1];
-      const finalChar0EndBits = finalCharBinaryStr.match(/(0*)$/)[1];
+      const finalChar0EndBits = finalCharBinaryStr.match(/(0*)$/)?.[1];
+      if (finalChar0EndBits == null) {
+        throw new BaseEncodingValidationError(
+          `Invalid ${opts.name} encoding: could not inspect pad bits`,
+        );
+      }
       const finalCharNon0BitLength =
         finalCharBinaryStr.length - finalChar0EndBits.length;
       if (finalCharNon0BitLength > finalCharMaxBits) {

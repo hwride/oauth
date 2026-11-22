@@ -41,7 +41,7 @@ export type SessionStore = {
    *
    * @param sessionId Session ID to load.
    */
-  loadSession(sessionId: string): Session | undefined;
+  loadSession(sessionId: string | null | undefined): Session | undefined;
 
   /**
    * Delete a session.
@@ -50,7 +50,7 @@ export type SessionStore = {
    * @returns True if the delete was successful. Note it does not count as a successful delete if the session no longer
    * exists or was expired. This gives you another chance to guard against race conditions.
    */
-  deleteSession(sessionId: string): boolean;
+  deleteSession(sessionId: string | null | undefined): boolean;
 };
 
 export function createSessionStore({

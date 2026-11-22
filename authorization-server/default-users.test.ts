@@ -77,9 +77,9 @@ test("defaultUsers can seed a user store", function () {
   const user = userStore.loadUserByUsername("user");
   const jane = userStore.loadUserByUsername("jane");
 
-  assert.notEqual(admin, undefined);
-  assert.notEqual(user, undefined);
-  assert.notEqual(jane, undefined);
+  assert.ok(admin);
+  assert.ok(user);
+  assert.ok(jane);
   assert.deepEqual(admin.roles, ["admin"]);
   assert.deepEqual(user.roles, ["customer"]);
   assert.equal(jane.allowedScopes, undefined);
