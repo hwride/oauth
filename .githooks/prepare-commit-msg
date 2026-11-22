@@ -1,0 +1,37 @@
+#!/bin/sh
+
+# Git gives this hook the commit-message file as its first argument.
+MESSAGE_FILE=$1
+
+# Get the name of the current Git branch.
+BRANCH=$(git branch --show-current)
+
+# Extract everything before the first dash.
+# "123-add-refresh" becomes "123".
+# Double %% removes the longest matching suffix, so this says remove anything from the first dash.
+ISSUE=${BRANCH%%-*}
+
+# If there was no dash, the branch does not use the issue-number convention.
+if [ "$ISSUE" = "$BRANCH" ]; then
+  exit 0
+fi
+
+# Make sure the extracted value contains only digits.
+case "$ISSUE" in
+  ''|*[!0-9]*)
+    exit 0
+    ;;
+esac
+
+# This is the line we want to add.
+MARKER="Relates to #$ISSUE"
+
+# Skip if we already have the marker in the commit message.
+# -F searches for the marker as plain text, rather than as a regular expression, -q is quiet
+if grep -Fq "$MARKER" "$MESSAGE_FILE"
+then
+  exit 0
+fi
+
+# Append a blank line followed by the issue reference.
+printf '\n%s\n' "$MARKER" >> "$MESSAGE_FILE"
