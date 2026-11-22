@@ -21,7 +21,10 @@ import {
   loadSessionFromCookie,
 } from "../utils/session-utils.ts";
 
-type AuthorizeQueryParams = {
+/**
+ * Parameter for OAuth authorization request or OIDC authentication request.
+ */
+type AuthorizeParams = {
   client_id?: string;
   response_type?: string;
   redirect_uri?: string;
@@ -36,6 +39,29 @@ type AuthorizeQueryParams = {
   request?: string;
 };
 
+type LoginFormBody = {
+  username?: string;
+  password?: string;
+};
+
+/**
+ * /authorize route
+ *
+ * General flow is as follows:
+ * 1. OAuth/OIDC authorization request is submitted, with either GET or POST.
+ * 2. Validation of params is performed. If valid check for existing valid authentication server session. If valid go to
+ *    step 5, if invalid go to step 3.
+ * 3. A login transaction is created, and the user is return login page HTML and ?tx=<tx-id>.
+ * 4. The user then submits the login form to POST /authorize/login. If credentials are valid, is MFA required? If yes
+ *    go to step 5, if no go to step 6.
+ * 5. Perform MFA. If successful go to step 6.
+ * 6. Create an auth server session created for the user.
+ * 7. Issued an authorization code and redirect to the configured client callback redirect URI with ?code=<code>.
+ *
+ * Authorization Endpoint - https://datatracker.ietf.org/doc/html/rfc6749#section-3.1
+ * Authorization Request - https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1
+ * Authentication Request - https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1
+ */
 export function registerAuthorizationRoute(
   fastify: FastifyInstance,
   {
@@ -48,110 +74,76 @@ export function registerAuthorizationRoute(
 ) {
   const authorizationEndpointPath = new URL(serverConfig.authorizationEndpoint)
     .pathname;
+  const loginEndpointPath = `${authorizationEndpointPath.replace(/\/$/, "")}/login`;
 
-  // Main authorization endpoint.
-  // Authentication Request - https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1
+  /**
+   * GET /authorize endpoint.
+   */
   fastify.get<{
-    Querystring: AuthorizeQueryParams;
+    Querystring: AuthorizeParams;
   }>(authorizationEndpointPath, async function (request, reply) {
-    // Make sure we don't leak tx ID query param.
     reply.header("cache-control", "no-store");
     reply.header("referrer-policy", "no-referrer");
 
     // Validate authorization request data.
-    const validationResult = validateAuthorizationRequest(request, reply);
+    const validationResult = validateAuthorizationRequest(request.query, reply);
     // In validation fails the util will have handled the response.
     if (validationResult.ok === false) {
       return;
     }
 
-    const { authorizationRequest } = validationResult;
-    const { maxAge, prompt } = authorizationRequest;
-    const requiresAuthTime = maxAge != null;
-
-    // If there's an existing auth server session and it passes max_age requirements, we can skip authentication and
-    // return immediately.
-    const sessionResult = loadSessionFromCookie(
+    return handleAuthorizationRequest({
       request,
+      reply,
+      loginEndpointPath,
+      authorizationRequest: validationResult.authorizationRequest,
+      serverConfig,
+      pendingAuthorizationStore,
+      grantStore,
       sessionStore,
       userStore,
-    );
-    if (sessionResult.ok === true) {
-      let canUseSession = true;
-
-      // Force a fresh-auth here.
-      if (maxAge === 0 || prompt?.includes("login")) {
-        canUseSession = false;
-      }
-      // Otherwise if max_age was included, check if our session passes the freshness check.
-      else if (maxAge != null && maxAge > 0) {
-        const maxAgeMs = maxAge * 1000;
-        const sessionAge = Date.now() - sessionResult.session.authTime;
-        canUseSession = sessionAge <= maxAgeMs;
-      }
-
-      // Otherwise allow re-use of the session.
-      if (canUseSession) {
-        return reply.redirect(
-          issueAuthorizationCodeAndRedirect(
-            serverConfig,
-            grantStore,
-            authorizationRequest,
-            sessionResult.user,
-            sessionResult.session.amr,
-            sessionResult.session.authTime,
-            requiresAuthTime,
-          ),
-        );
-      }
-    } else {
-      // If there is a problem with the session, proceed to normal login and clear the existing session if one was present.
-      // The loadSessionFromCookie util will have removed any invalid sessions if they exist.
-      if (sessionResult.sessionIdWasPresent) {
-        reply.header("Set-Cookie", getSessionCookieClear());
-      }
-    }
-
-    // Should error if attempting to skip prompt without a session.
-    if (prompt?.includes("none")) {
-      return sendRedirectErrorResponse({
-        reply,
-        redirectUri: authorizationRequest.redirectUri,
-        state: authorizationRequest.state,
-        error: "login_required",
-        error_description: "Login is required",
-      });
-    }
-
-    // Create a new pending authorization transaction.
-    const transactionId = pendingAuthorizationStore.newPendingAuthorization({
-      stage: "login",
-      authorizationRequest: validationResult.authorizationRequest,
-      amr: [],
-      mfaFailedAttempts: 0,
-      expiresAt: Date.now() + serverConfig.mfaTransactionLifetimeSeconds * 1000,
-      requiresAuthTime,
     });
-
-    return reply
-      .type("text/html; charset=utf-8")
-      .send(
-        renderLoginPage(
-          authorizationEndpointPath,
-          validationResult.authorizationRequest,
-          transactionId,
-        ),
-      );
   });
 
-  // Endpoint to submit login form to if login is required.
+  /**
+   * POST /authorize endpoint.
+   *
+   * This is the POST version of submitting an authorization request. It creates a login transaction when user
+   * authentication is required. See https://openid.net/specs/openid-connect-core-1_0-35.html#rfc.section.3.1.2.1.
+   */
+  fastify.post<{
+    Body: AuthorizeParams;
+  }>(authorizationEndpointPath, async function (request, reply) {
+    reply.header("cache-control", "no-store");
+    reply.header("referrer-policy", "no-referrer");
+    const validationResult = validateAuthorizationRequest(request.body, reply);
+    // If validation fails the util will have handled the response.
+    if (validationResult.ok === false) {
+      return;
+    }
+
+    return handleAuthorizationRequest({
+      request,
+      reply,
+      loginEndpointPath,
+      authorizationRequest: validationResult.authorizationRequest,
+      serverConfig,
+      pendingAuthorizationStore,
+      grantStore,
+      sessionStore,
+      userStore,
+    });
+  });
+
+  /**
+   * POST /authorize/login endpoint.
+   *
+   * Handles credentials submitted for an active login transaction.
+   */
   fastify.post<{
     Querystring: { tx?: string };
-    Body: {
-      username?: string;
-      password?: string;
-    };
-  }>(authorizationEndpointPath, async function (request, reply) {
+    Body: LoginFormBody;
+  }>(loginEndpointPath, async function (request, reply) {
     // Make sure we don't leak tx ID query param.
     reply.header("cache-control", "no-store");
     reply.header("referrer-policy", "no-referrer");
@@ -194,7 +186,7 @@ export function registerAuthorizationRoute(
         .type("text/html; charset=utf-8")
         .send(
           renderLoginPage(
-            authorizationEndpointPath,
+            loginEndpointPath,
             authorizationRequest,
             tx,
             "Invalid username or password",
@@ -282,10 +274,9 @@ type AuthorizationRequestValidationResult =
     };
 
 function validateAuthorizationRequest(
-  request: FastifyRequest<{ Querystring: AuthorizeQueryParams }>,
+  params: AuthorizeParams,
   reply: FastifyReply,
 ): AuthorizationRequestValidationResult {
-  const query = request.query;
   const sendPostErrorResponseHelper = ({
     error,
     error_description,
@@ -304,7 +295,7 @@ function validateAuthorizationRequest(
   // Check for valid input.
   // OAuth 2.0, Authorization Response, Error Response
   // https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
-  if (!query.redirect_uri) {
+  if (!params.redirect_uri) {
     return sendPostErrorResponseHelper({
       error: "invalid_request",
       error_description: "Missing redirect_uri",
@@ -313,7 +304,7 @@ function validateAuthorizationRequest(
 
   // Check for a matching client.
   const clientConfig = clientsConfig.find(function (client) {
-    return client.clientId === query.client_id;
+    return client.clientId === params.client_id;
   });
   if (!clientConfig) {
     return sendPostErrorResponseHelper({
@@ -323,7 +314,7 @@ function validateAuthorizationRequest(
   }
 
   // Check for matching redirect URI.
-  if (!clientConfig.redirectUris.includes(query.redirect_uri)) {
+  if (!clientConfig.redirectUris.includes(params.redirect_uri)) {
     return sendPostErrorResponseHelper({
       error: "invalid_request",
       error_description: "Invalid redirect_uri",
@@ -339,15 +330,15 @@ function validateAuthorizationRequest(
   }) => {
     sendRedirectErrorResponse({
       reply,
-      redirectUri: query.redirect_uri,
-      state: query.state != null ? query.state : undefined,
+      redirectUri: params.redirect_uri,
+      state: params.state != null ? params.state : undefined,
       error,
       error_description,
     });
     return { ok: false } as const;
   };
 
-  if (query.request != null) {
+  if (params.request != null) {
     return sendRedirectErrorResponseHelper({
       error: "request_not_supported",
       error_description: "The request parameter is not supported",
@@ -355,7 +346,7 @@ function validateAuthorizationRequest(
   }
 
   // Check for supported grant type.
-  if (query.response_type !== "code") {
+  if (params.response_type !== "code") {
     return sendRedirectErrorResponseHelper({
       error: "unsupported_response_type",
       error_description: "Unsupported response_type value",
@@ -363,31 +354,31 @@ function validateAuthorizationRequest(
   }
 
   let requestedResource: SupportedResource | undefined;
-  if (query.resource) {
-    if (!isSupportedResource(query.resource)) {
+  if (params.resource) {
+    if (!isSupportedResource(params.resource)) {
       return sendRedirectErrorResponseHelper({
         error: "invalid_target",
         error_description: "Unsupported resource indicator",
       });
     }
-    requestedResource = query.resource;
+    requestedResource = params.resource;
   }
 
   const authorizationRequest: AuthorizationRequest = {
     clientId: clientConfig.clientId,
-    redirectUri: query.redirect_uri,
-    responseType: query.response_type,
-    scope: query.scope,
-    nonce: query.nonce,
-    state: query.state,
+    redirectUri: params.redirect_uri,
+    responseType: params.response_type,
+    scope: params.scope,
+    nonce: params.nonce,
+    state: params.state,
     resource: requestedResource,
   };
 
   // Expose PKCE data. https://datatracker.ietf.org/doc/html/rfc7636
-  if (query.code_challenge) {
+  if (params.code_challenge) {
     if (
-      query.code_challenge_method != null &&
-      !["plain", "S256"].includes(query.code_challenge_method)
+      params.code_challenge_method != null &&
+      !["plain", "S256"].includes(params.code_challenge_method)
     ) {
       return sendRedirectErrorResponseHelper({
         error: "invalid_request",
@@ -395,17 +386,17 @@ function validateAuthorizationRequest(
       });
     }
 
-    authorizationRequest.codeChallenge = query.code_challenge;
+    authorizationRequest.codeChallenge = params.code_challenge;
     authorizationRequest.codeChallengeMethod =
-      query.code_challenge_method === "S256" ? "S256" : "plain";
+      params.code_challenge_method === "S256" ? "S256" : "plain";
   }
 
   // max_age
-  if (query.max_age != null) {
-    const maxAge = Number(query.max_age);
+  if (params.max_age != null) {
+    const maxAge = Number(params.max_age);
     // We later store max age as ms, so don't allow values larger than can be stored as numbers in there.
     const maxValue = Math.floor(Number.MAX_SAFE_INTEGER / 1000);
-    if (!/^\d+$/.test(query.max_age) || maxAge > maxValue) {
+    if (!/^\d+$/.test(params.max_age) || maxAge > maxValue) {
       return sendRedirectErrorResponseHelper({
         error: "invalid_request",
         error_description: "Invalid max_age",
@@ -415,20 +406,20 @@ function validateAuthorizationRequest(
   }
 
   // prompt
-  if (query.prompt != null) {
+  if (params.prompt != null) {
     const sendInvalidPromptResponse = () =>
       sendRedirectErrorResponseHelper({
         error: "invalid_request",
         error_description: "Invalid prompt",
       });
 
-    if (typeof query.prompt !== "string") {
+    if (typeof params.prompt !== "string") {
       return sendInvalidPromptResponse();
     }
 
     // Check only valid prompts are given.
     const validPrompts: Set<string> = new Set(prompts);
-    const promptParts = query.prompt.split(" ");
+    const promptParts = params.prompt.split(" ");
     let hasNone = false;
     const hasValidPrompts = promptParts.every((prompt) => {
       if (prompt === "none") hasNone = true;
@@ -453,8 +444,105 @@ function validateAuthorizationRequest(
   };
 }
 
+/**
+ * Main OAuth authorization request handler.
+ *
+ * Authorization Request - https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1
+ * Authentication Request - https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1
+ */
+function handleAuthorizationRequest({
+  request,
+  reply,
+  loginEndpointPath,
+  authorizationRequest,
+  serverConfig,
+  pendingAuthorizationStore,
+  grantStore,
+  sessionStore,
+  userStore,
+}: {
+  request: FastifyRequest;
+  reply: FastifyReply;
+  loginEndpointPath: string;
+  authorizationRequest: AuthorizationRequest;
+  serverConfig: ServerContext["serverConfig"];
+  pendingAuthorizationStore: ServerContext["pendingAuthorizationStore"];
+  grantStore: ServerContext["grantStore"];
+  sessionStore: ServerContext["sessionStore"];
+  userStore: ServerContext["userStore"];
+}) {
+  const { maxAge, prompt } = authorizationRequest;
+  const requiresAuthTime = maxAge != null;
+
+  // If there's an existing auth server session and it passes max_age requirements, we can skip authentication and
+  // return immediately.
+  const sessionResult = loadSessionFromCookie(request, sessionStore, userStore);
+  if (sessionResult.ok === true) {
+    let canUseSession = true;
+
+    // Force a fresh-auth here.
+    if (maxAge === 0 || prompt?.includes("login")) {
+      canUseSession = false;
+    }
+    // Otherwise if max_age was included, check if our session passes the freshness check.
+    else if (maxAge != null && maxAge > 0) {
+      const maxAgeMs = maxAge * 1000;
+      const sessionAge = Date.now() - sessionResult.session.authTime;
+      canUseSession = sessionAge <= maxAgeMs;
+    }
+
+    // Otherwise allow re-use of the session.
+    if (canUseSession) {
+      return reply.redirect(
+        issueAuthorizationCodeAndRedirect(
+          serverConfig,
+          grantStore,
+          authorizationRequest,
+          sessionResult.user,
+          sessionResult.session.amr,
+          sessionResult.session.authTime,
+          requiresAuthTime,
+        ),
+      );
+    }
+  } else {
+    // If there is a problem with the session, proceed to normal login and clear the existing session if one was present.
+    // The loadSessionFromCookie util will have removed any invalid sessions if they exist.
+    if (sessionResult.sessionIdWasPresent) {
+      reply.header("Set-Cookie", getSessionCookieClear());
+    }
+  }
+
+  // Should error if attempting to skip prompt without a session.
+  if (prompt?.includes("none")) {
+    return sendRedirectErrorResponse({
+      reply,
+      redirectUri: authorizationRequest.redirectUri,
+      state: authorizationRequest.state,
+      error: "login_required",
+      error_description: "Login is required",
+    });
+  }
+
+  // Create a new pending authorization transaction.
+  const transactionId = pendingAuthorizationStore.newPendingAuthorization({
+    stage: "login",
+    authorizationRequest,
+    amr: [],
+    mfaFailedAttempts: 0,
+    expiresAt: Date.now() + serverConfig.mfaTransactionLifetimeSeconds * 1000,
+    requiresAuthTime,
+  });
+
+  return reply
+    .type("text/html; charset=utf-8")
+    .send(
+      renderLoginPage(loginEndpointPath, authorizationRequest, transactionId),
+    );
+}
+
 function renderLoginPage(
-  authorizationEndpointPath: string,
+  loginEndpointPath: string,
   authorizationRequest: AuthorizationRequest,
   transactionId: string,
   errorMessage?: string,
@@ -489,7 +577,7 @@ function renderLoginPage(
     signupPathSearchParams.set("prompt", authorizationRequest.prompt.join(" "));
   }
   const signupPath = `/signup?${signupPathSearchParams.toString()}`;
-  const loginActionUrl = new URL(authorizationEndpointPath, "http://localhost");
+  const loginActionUrl = new URL(loginEndpointPath, "http://localhost");
   loginActionUrl.searchParams.set("tx", transactionId);
   const loginAction = loginActionUrl.pathname + loginActionUrl.search;
 

@@ -20,6 +20,46 @@ import { createPendingAuthorizationStore } from "./stores/pending-authorization-
 
 const defaultServerConfig = getTestServerConfig();
 
+test("authorization server completes an authorization request submitted with POST", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
+    grantStore: authorizationCodeStore,
+  });
+  const address = await fastify.listen({
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const authorizationResponse = await authorizeClient(
+      address,
+      "client-id-opaque",
+      {
+        authorizationRequestMethod: "POST",
+        authorizationRequest: {
+          state: "state-value-123",
+        },
+      },
+    );
+    assert.equal(authorizationResponse.status, 302);
+
+    const callbackUrl = getRedirectUrl(authorizationResponse);
+    assert.equal(callbackUrl.origin, "http://localhost:3000");
+    assert.equal(callbackUrl.pathname, "/callback");
+    assert.equal(callbackUrl.searchParams.get("state"), "state-value-123");
+
+    const authorizationCode = callbackUrl.searchParams.get("code");
+    assert.notEqual(authorizationCode, null);
+    assert.equal(
+      authorizationCodeStore.loadAuthorizationCode(authorizationCode).subject,
+      janeUserId,
+    );
+  } finally {
+    await fastify.close();
+  }
+});
+
 test("MFA authorization flow completes TOTP challenge and preserves the transaction request", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const pendingAuthorizationStore = createPendingAuthorizationStore();
@@ -1042,12 +1082,14 @@ async function authorizeClient(
       username: "jane",
       password: "password",
     },
+    authorizationRequestMethod = "GET",
     authorizationRequest = {},
   }: {
     credentials?: {
       username: string;
       password: string;
     };
+    authorizationRequestMethod?: "GET" | "POST";
     authorizationRequest?: Record<string, string>;
   } = {
     credentials: {
@@ -1067,12 +1109,19 @@ async function authorizeClient(
 
   // Fetch the authorization request.
   const queryString = new URLSearchParams(requestParams).toString();
-  const loginPageResponse = await fetch(
-    `${address}${authorizationPath}?${queryString}`,
-    {
-      redirect: "manual",
-    },
-  );
+  const authorizationRequestUrl =
+    authorizationRequestMethod === "GET"
+      ? `${address}${authorizationPath}?${queryString}`
+      : `${address}${authorizationPath}`;
+  const loginPageResponse = await fetch(authorizationRequestUrl, {
+    body: authorizationRequestMethod === "POST" ? queryString : undefined,
+    headers:
+      authorizationRequestMethod === "POST"
+        ? { "content-type": "application/x-www-form-urlencoded" }
+        : undefined,
+    method: authorizationRequestMethod,
+    redirect: "manual",
+  });
   assert.equal(loginPageResponse.status, 200);
 
   // Submit the login form.
