@@ -81,8 +81,8 @@ test("POST authorization request completes login and redirects with an authoriza
   assert.notEqual(redirectUrl.searchParams.get("code"), null);
   assert.equal(
     authorizationCodeStore.loadAuthorizationCode(
-      redirectUrl.searchParams.get("code"),
-    ).subject,
+      redirectUrl.searchParams.get("code")!,
+    )!.subject,
     janeUserId,
   );
 });
@@ -138,8 +138,9 @@ test("GET authorization endpoint reuses a fresh session for max_age and save aut
   assert.equal(response.status, 302);
   assert.equal(response.headers.getSetCookie().length, 0);
   const code = getRedirectUrl(response).searchParams.get("code");
-  assert.notEqual(code, null);
+  assert.ok(code);
   const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.ok(codeRecord);
   assert.equal(codeRecord.requiresAuthTime, true);
   assert.equal(codeRecord.authTime, session.authTime);
 });
@@ -283,9 +284,9 @@ test("GET authorization endpoint reuses an active session for prompt=none", asyn
 
   assert.equal(response.status, 302);
   const code = getRedirectUrl(response).searchParams.get("code");
-  assert.notEqual(code, null);
+  assert.ok(code);
   assert.equal(
-    authorizationCodeStore.loadAuthorizationCode(code).subject,
+    authorizationCodeStore.loadAuthorizationCode(code)!.subject,
     janeUserId,
   );
 });
@@ -395,9 +396,10 @@ test("POST authorization endpoint redirects with an authorization code after log
   const code = redirectUrl.searchParams.get("code");
   assert.equal(redirectUrl.origin, "http://localhost:3000");
   assert.equal(redirectUrl.pathname, "/callback");
-  assert.notEqual(code, null);
+  assert.ok(code);
 
   const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.ok(codeRecord);
   assert.deepEqual(
     {
       clientId: codeRecord.clientId,
@@ -520,9 +522,10 @@ test("POST authorization endpoint stores PKCE parameters with the authorization 
 
   const redirectUrl = getRedirectUrl(response);
   const code = redirectUrl.searchParams.get("code");
-  assert.notEqual(code, null);
+  assert.ok(code);
 
   const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.ok(codeRecord);
   assert.deepEqual(
     {
       clientId: codeRecord.clientId,
@@ -559,9 +562,10 @@ test("POST authorization endpoint stores scope with the authorization code", asy
 
   const redirectUrl = getRedirectUrl(response);
   const code = redirectUrl.searchParams.get("code");
-  assert.notEqual(code, null);
+  assert.ok(code);
 
   const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.ok(codeRecord);
   assert.equal(codeRecord.scope, "openid profile email");
   assert.ok(codeRecord.expiresAt > Date.now());
 });
@@ -588,9 +592,10 @@ test("POST authorization endpoint stores allowed resource scopes", async functio
 
   const redirectUrl = getRedirectUrl(response);
   const code = redirectUrl.searchParams.get("code");
-  assert.notEqual(code, null);
+  assert.ok(code);
 
   const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.ok(codeRecord);
   assert.equal(codeRecord.scope, "openid orders:read profile");
   assert.ok(codeRecord.expiresAt > Date.now());
 });
@@ -617,9 +622,10 @@ test("POST authorization endpoint stores allowed admin resource scopes", async f
 
   const redirectUrl = getRedirectUrl(response);
   const code = redirectUrl.searchParams.get("code");
-  assert.notEqual(code, null);
+  assert.ok(code);
 
   const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.ok(codeRecord);
   assert.equal(codeRecord.subject, adminUserId);
   assert.equal(codeRecord.scope, "openid orders:read:any profile");
   assert.ok(codeRecord.expiresAt > Date.now());
@@ -658,9 +664,10 @@ test("POST authorization endpoint merges role scopes with user allowed scopes", 
 
   const redirectUrl = getRedirectUrl(response);
   const code = redirectUrl.searchParams.get("code");
-  assert.notEqual(code, null);
+  assert.ok(code);
 
   const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.ok(codeRecord);
   assert.equal(codeRecord.subject, roleUserId);
   assert.equal(codeRecord.scope, "orders:read orders:read:any");
   assert.ok(codeRecord.expiresAt > Date.now());
@@ -687,9 +694,10 @@ test("POST authorization endpoint strips restricted and unknown scopes for users
 
   const redirectUrl = getRedirectUrl(response);
   const code = redirectUrl.searchParams.get("code");
-  assert.notEqual(code, null);
+  assert.ok(code);
 
   const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.ok(codeRecord);
   assert.equal(codeRecord.scope, "openid profile");
   assert.ok(codeRecord.expiresAt > Date.now());
 });
@@ -712,9 +720,10 @@ test("POST authorization endpoint stores nonce with the authorization code", asy
 
   const redirectUrl = getRedirectUrl(response);
   const code = redirectUrl.searchParams.get("code");
-  assert.notEqual(code, null);
+  assert.ok(code);
 
   const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.ok(codeRecord);
   assert.equal(codeRecord.nonce, "nonce-value-123");
   assert.ok(codeRecord.expiresAt > Date.now());
 });
@@ -737,9 +746,10 @@ test("POST authorization endpoint sets code expiry from configured lifetime", as
 
   const redirectUrl = getRedirectUrl(response);
   const code = redirectUrl.searchParams.get("code");
-  assert.notEqual(code, null);
+  assert.ok(code);
 
   const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.ok(codeRecord);
   assert.ok(codeRecord.expiresAt > Date.now());
   assert.ok(codeRecord.expiresAt <= Date.now() + 2_000);
 });
@@ -915,9 +925,10 @@ test("POST authorization endpoint stores orders API resource indicator with the 
 
   const redirectUrl = getRedirectUrl(response);
   const code = redirectUrl.searchParams.get("code");
-  assert.notEqual(code, null);
+  assert.ok(code);
 
   const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.ok(codeRecord);
   assert.equal(codeRecord.resource, ordersApiResource);
 });
 
@@ -938,9 +949,10 @@ test("POST authorization endpoint stores products API resource indicator with th
 
   const redirectUrl = getRedirectUrl(response);
   const code = redirectUrl.searchParams.get("code");
-  assert.notEqual(code, null);
+  assert.ok(code);
 
   const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
+  assert.ok(codeRecord);
   assert.equal(codeRecord.resource, productsApiResource);
 });
 
@@ -1160,9 +1172,11 @@ async function submitAuthorizationLogin(
       redirect: "manual",
     });
     if (loginPage.status !== 200) return loginPage;
-    const action = (await loginPage.text()).match(
+    const actionMatch = (await loginPage.text()).match(
       /<form method="post" action="([^"]+)"/,
-    )[1];
+    );
+    assert.ok(actionMatch);
+    const action = actionMatch[1];
     const requestBody = new URLSearchParams({
       username: credentials.username,
       password: credentials.password,
@@ -1183,7 +1197,7 @@ async function submitAuthorizationLogin(
 
 function getRedirectUrl(response: Response) {
   const location = response.headers.get("location");
-  assert.notEqual(location, null);
+  assert.ok(location);
   return new URL(location);
 }
 

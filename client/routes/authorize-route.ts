@@ -25,7 +25,7 @@ export function registerAuthorizeRoute(
       authorize_request_method?: "GET" | "POST";
     };
   }>("/authorize", async function (request, reply) {
-    const clientId = process.env.CLIENT_ID;
+    const clientId = process.env.CLIENT_ID!;
     const {
       scope,
       resource,

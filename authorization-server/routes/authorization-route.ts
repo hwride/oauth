@@ -109,7 +109,9 @@ export function registerAuthorizationRoute(
    * POST /authorize endpoint.
    *
    * This is the POST version of submitting an authorization request. It creates a login transaction when user
-   * authentication is required. See https://openid.net/specs/openid-connect-core-1_0-35.html#rfc.section.3.1.2.1.
+   * authentication is required. See
+   * - https://openid.net/specs/openid-connect-core-1_0.html#TokenRequest
+   * - https://openid.net/specs/openid-connect-core-1_0.html#FormSerialization
    */
   fastify.post<{
     Body: AuthorizeParams;
@@ -301,6 +303,7 @@ function validateAuthorizationRequest(
       error_description: "Missing redirect_uri",
     });
   }
+  const redirectUri = params.redirect_uri;
 
   // Check for a matching client.
   const clientConfig = clientsConfig.find(function (client) {
@@ -314,7 +317,7 @@ function validateAuthorizationRequest(
   }
 
   // Check for matching redirect URI.
-  if (!clientConfig.redirectUris.includes(params.redirect_uri)) {
+  if (!clientConfig.redirectUris.includes(redirectUri)) {
     return sendPostErrorResponseHelper({
       error: "invalid_request",
       error_description: "Invalid redirect_uri",
@@ -330,7 +333,7 @@ function validateAuthorizationRequest(
   }) => {
     sendRedirectErrorResponse({
       reply,
-      redirectUri: params.redirect_uri,
+      redirectUri,
       state: params.state != null ? params.state : undefined,
       error,
       error_description,
@@ -366,7 +369,7 @@ function validateAuthorizationRequest(
 
   const authorizationRequest: AuthorizationRequest = {
     clientId: clientConfig.clientId,
-    redirectUri: params.redirect_uri,
+    redirectUri,
     responseType: params.response_type,
     scope: params.scope,
     nonce: params.nonce,

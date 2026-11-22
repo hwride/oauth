@@ -21,7 +21,9 @@ async function getRedirectUris(overrides: NodeJS.ProcessEnv = {}) {
     const configUrl = new URL("./clients-config.ts", import.meta.url);
     configUrl.searchParams.set("test", String(configVersion++));
     const { clientsConfig } = await import(configUrl.href);
-    return clientsConfig.map((client) => client.redirectUris);
+    return clientsConfig.map(
+      (client: (typeof clientsConfig)[number]) => client.redirectUris,
+    );
   } finally {
     names.forEach((name, index) => {
       if (saved[index] === undefined) {

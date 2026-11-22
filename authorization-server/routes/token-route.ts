@@ -59,7 +59,7 @@ export function registerTokenRoute(
   fastify.post<{
     Body: TokenRequestBody;
   }>(tokenEndpointPath, async function (request, reply) {
-    let clientConfig: ClientConfig;
+    let clientConfig: ClientConfig | undefined;
 
     // OAuth 2.0, Client Authentication
     // https://datatracker.ietf.org/doc/html/rfc6749#section-2.3
@@ -78,15 +78,15 @@ export function registerTokenRoute(
       }
 
       // Find a configured client matching the client ID in the given credentials.
-      clientConfig = clientsConfig.find(function (client) {
+      const matchingClientConfig = clientsConfig.find(function (client) {
         return client.clientId === clientCredentials.clientId;
       });
 
       // Check if matching client is configured to support basic auth and the secret matches.
       if (
-        clientConfig == null ||
-        clientConfig.clientAuthMethod !== "client_secret_basic" ||
-        clientConfig.clientSecret !== clientCredentials.clientSecret
+        matchingClientConfig == null ||
+        matchingClientConfig.clientAuthMethod !== "client_secret_basic" ||
+        matchingClientConfig.clientSecret !== clientCredentials.clientSecret
       ) {
         return reply
           .code(401)
@@ -95,6 +95,7 @@ export function registerTokenRoute(
             error: "invalid_client",
           });
       }
+      clientConfig = matchingClientConfig;
 
       // client_id isn't required if using Basic auth, but if they provide it
       // then check it matches the authenticated client.
@@ -109,16 +110,19 @@ export function registerTokenRoute(
     }
     // No auth header, could be a public client, client_secret_post auth, or invalid.
     else {
-      clientConfig = clientsConfig.find(function (client) {
+      const matchingClientConfig = clientsConfig.find(function (client) {
         return client.clientId === request.body.client_id;
       });
 
-      if (clientConfig == null) {
+      if (matchingClientConfig == null) {
         return reply.code(401).send({
           error: "invalid_client",
           error_description: "Client not found",
         });
-      } else if (clientConfig.clientAuthMethod === "client_secret_basic") {
+      }
+      clientConfig = matchingClientConfig;
+
+      if (matchingClientConfig.clientAuthMethod === "client_secret_basic") {
         return reply
           .code(401)
           .header("www-authenticate", 'Basic realm="token"')
@@ -126,8 +130,10 @@ export function registerTokenRoute(
             error: "invalid_client",
             error_description: "Client requires Basic authentication",
           });
-      } else if (clientConfig.clientAuthMethod === "client_secret_post") {
-        if (clientConfig.clientSecret !== request.body.client_secret) {
+      } else if (
+        matchingClientConfig.clientAuthMethod === "client_secret_post"
+      ) {
+        if (matchingClientConfig.clientSecret !== request.body.client_secret) {
           return reply.code(401).send({
             error: "invalid_client",
             error_description: "client_secret_post authentication failed",
@@ -135,11 +141,17 @@ export function registerTokenRoute(
         }
       }
       // We never expect to get there.
-      else if (clientConfig.clientAuthMethod !== "none") {
+      else if (matchingClientConfig.clientAuthMethod !== "none") {
         return reply.code(401).send({
           error: "invalid_client",
         });
       }
+    }
+
+    if (clientConfig == null) {
+      return reply.code(401).send({
+        error: "invalid_client",
+      });
     }
 
     // Switch on grant type.
@@ -237,6 +249,12 @@ async function authCodeGrant({
       error_description: "plain code_verifier does not match",
     });
   } else if (authCodeRecord.codeChallengeMethod === "S256") {
+    if (body.code_verifier == null) {
+      return reply.code(400).send({
+        error: "invalid_grant",
+        error_description: "Missing code_verifier",
+      });
+    }
     const codeChallengeFromBody = createHash("sha256")
       .update(body.code_verifier)
       .digest("base64url");

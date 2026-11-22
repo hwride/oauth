@@ -30,7 +30,7 @@ test("authorization code flow defaults access token aud to issuer when no resour
 
     const redirectUrl = getRedirectUrl(authorizationResponse);
     const code = redirectUrl.searchParams.get("code");
-    assert.notEqual(code, null);
+    assert.ok(code);
 
     const tokenResponse = await fetchTokenEndpoint(address, code);
     assert.equal(tokenResponse.status, 200);
@@ -69,7 +69,7 @@ test("authorization code flow sets access token aud to orders API resource when 
 
     const redirectUrl = getRedirectUrl(authorizationResponse);
     const code = redirectUrl.searchParams.get("code");
-    assert.notEqual(code, null);
+    assert.ok(code);
 
     const tokenResponse = await fetchTokenEndpoint(address, code);
     assert.equal(tokenResponse.status, 200);
@@ -108,7 +108,7 @@ test("authorization code flow sets access token aud to requested resource indica
 
     const redirectUrl = getRedirectUrl(authorizationResponse);
     const code = redirectUrl.searchParams.get("code");
-    assert.notEqual(code, null);
+    assert.ok(code);
 
     const tokenResponse = await fetchTokenEndpoint(address, code);
     assert.equal(tokenResponse.status, 200);
@@ -148,7 +148,7 @@ test("authorization code flow includes issuer and orders API resource audiences 
 
     const redirectUrl = getRedirectUrl(authorizationResponse);
     const code = redirectUrl.searchParams.get("code");
-    assert.notEqual(code, null);
+    assert.ok(code);
 
     const tokenResponse = await fetchTokenEndpoint(address, code);
     assert.equal(tokenResponse.status, 200);
@@ -191,7 +191,7 @@ test("refresh token flow preserves resource audience from the original authoriza
 
     const redirectUrl = getRedirectUrl(authorizationResponse);
     const code = redirectUrl.searchParams.get("code");
-    assert.notEqual(code, null);
+    assert.ok(code);
 
     const tokenResponse = await fetchTokenEndpoint(address, code);
     assert.equal(tokenResponse.status, 200);
@@ -293,7 +293,7 @@ test("authorization code flow filters scopes by allowed scopes for the requested
 
     const redirectUrl = getRedirectUrl(authorizationResponse);
     const code = redirectUrl.searchParams.get("code");
-    assert.notEqual(code, null);
+    assert.ok(code);
 
     const tokenResponse = await fetchTokenEndpoint(address, code);
     assert.equal(tokenResponse.status, 200);
@@ -328,7 +328,7 @@ test("OIDC scopes are not filtered by user or resource scope filtering", async f
 
     const redirectUrl = getRedirectUrl(authorizationResponse);
     const code = redirectUrl.searchParams.get("code");
-    assert.notEqual(code, null);
+    assert.ok(code);
 
     const tokenResponse = await fetchTokenEndpoint(address, code);
     assert.equal(tokenResponse.status, 200);
@@ -371,7 +371,7 @@ test("authorization code flow keeps scopes allowed by the requested resource and
 
     const redirectUrl = getRedirectUrl(authorizationResponse);
     const code = redirectUrl.searchParams.get("code");
-    assert.notEqual(code, null);
+    assert.ok(code);
 
     const tokenResponse = await fetchTokenEndpoint(address, code);
     assert.equal(tokenResponse.status, 200);
@@ -403,9 +403,11 @@ async function authorizeClient(
   );
   assert.equal(loginPageResponse.status, 200);
 
-  const action = (await loginPageResponse.text()).match(
+  const actionMatch = (await loginPageResponse.text()).match(
     /<form method="post" action="([^"]+)"/,
-  )[1];
+  );
+  assert.ok(actionMatch);
+  const action = actionMatch[1];
   const loginRequestBody = new URLSearchParams({
     username: credentials.username,
     password: credentials.password,
@@ -517,7 +519,7 @@ function getAuthorizationRequestParams(
 
 function getRedirectUrl(response: Response) {
   const location = response.headers.get("location");
-  assert.notEqual(location, null);
+  assert.ok(location);
   return new URL(location);
 }
 

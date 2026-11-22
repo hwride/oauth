@@ -20,8 +20,8 @@ test("pending authorization store updates a record when its stage matches", () =
   const loginRecord = {
     ...createRecord(),
     stage: "login" as const,
-    userId: undefined,
-    amr: [],
+    userId: undefined as string | undefined,
+    amr: [] as PendingAuthorizationRecord["amr"],
   };
   const transactionId = store.newPendingAuthorization(loginRecord);
   const updatedRecord = {
@@ -76,7 +76,7 @@ test("pending authorization store refuses updates for missing, expired, or wrong
     store.updatePendingAuthorization(transactionId, "mfa", () => updatedRecord),
     "invalid_stage",
   );
-  assert.equal(store.loadPendingAuthorization(transactionId).stage, "login");
+  assert.equal(store.loadPendingAuthorization(transactionId)?.stage, "login");
 
   const expiredTransactionId = store.newPendingAuthorization({
     ...createRecord(Date.now() - 1),

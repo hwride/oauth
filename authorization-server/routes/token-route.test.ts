@@ -572,13 +572,13 @@ test("POST token endpoint returns a signed jwt for jwt access token type", async
   assert.equal(verified.payload.client_id, "client-id-jwt");
   assert.deepEqual(verified.payload.amr, ["pwd"]);
   assert.equal(verified.payload.auth_time, undefined);
-  assert.equal(typeof verified.payload.jti, "string");
+  assert.ok(typeof verified.payload.jti === "string");
   assert.notEqual(verified.payload.jti.length, 0);
   assert.deepEqual(tokenStore.loadAccessToken(tokenResponse.access_token), {
     type: "jwt",
   });
-  assert.equal(typeof verified.payload.iat, "number");
-  assert.equal(typeof verified.payload.exp, "number");
+  assert.ok(typeof verified.payload.iat === "number");
+  assert.ok(typeof verified.payload.exp === "number");
   assert.ok(verified.payload.exp > verified.payload.iat);
   assert.equal(
     authorizationCodeStore.hasAuthorizationCode("test-auth-code"),
@@ -758,7 +758,7 @@ test("POST token endpoint returns an ID token when scope includes openid token",
   assert.equal(verified.payload.sub, "test-user-id");
   assert.deepEqual(verified.payload.amr, ["pwd"]);
   assert.equal(verified.payload.name, undefined);
-  assert.equal(typeof verified.payload.jti, "string");
+  assert.ok(typeof verified.payload.jti === "string");
   assert.notEqual(verified.payload.jti.length, 0);
 });
 
@@ -772,7 +772,7 @@ test("POST token endpoint does not include profile claims in ID token", async fu
     },
   ]);
   const testUser = userStore.loadUserByUsername("test-user");
-  assert.notEqual(testUser, undefined);
+  assert.ok(testUser);
   const authorizationCodeStore = createAuthorizationCodeStoreWithCodeForClient(
     "client-id-jwt",
     "openid profile",
@@ -912,7 +912,7 @@ test("POST token endpoint includes refresh_token when scope includes offline_acc
   const refreshTokenRecord = refreshTokenStore.getRefreshToken(
     tokenResponse.refresh_token,
   );
-  assert.notEqual(refreshTokenRecord, undefined);
+  assert.ok(refreshTokenRecord);
   assert.equal(refreshTokenRecord.clientId, "client-id-opaque");
   assert.equal(refreshTokenRecord.scope, "openid offline_access email");
   assert.equal(refreshTokenRecord.subject, "test-user-id");
@@ -991,7 +991,7 @@ test("POST token endpoint stores resource indicator with refresh_token", async f
   const refreshTokenRecord = refreshTokenStore.getRefreshToken(
     tokenResponse.refresh_token,
   );
-  assert.notEqual(refreshTokenRecord, undefined);
+  assert.ok(refreshTokenRecord);
   assert.equal(refreshTokenRecord.resource, ordersApiResource);
 });
 

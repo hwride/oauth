@@ -136,7 +136,7 @@ test("POST signup route creates a user and redirects back to the authorization e
 
   assert.equal(response.status, 302);
   const newUser = userStore.loadUserByUsername("new-user");
-  assert.notEqual(newUser, undefined);
+  assert.ok(newUser);
   assert.equal(isUuidV4(newUser.userId), true);
   assert.equal(newUser.password, "new-password");
   assert.equal(newUser.name, "New User");

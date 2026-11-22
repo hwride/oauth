@@ -52,9 +52,12 @@ export function otpAuthUrl(options: OtpAuthUrlOptions): string {
   const url = new URL(`otpauth://${options.type}/${labelEncoded}`);
 
   // Set URL params
-  const setOptionalParamHelper = (name: keyof OtpAuthUrlOptionsTotp) => {
-    if (options[name]) {
-      url.searchParams.set(name, String(options[name]));
+  const setOptionalParamHelper = (
+    name: "algorithm" | "digits" | "period",
+    value: string | number | undefined,
+  ) => {
+    if (value) {
+      url.searchParams.set(name, String(value));
     }
   };
 
@@ -64,11 +67,11 @@ export function otpAuthUrl(options: OtpAuthUrlOptions): string {
     url.searchParams.set("issuer", options.issuer);
   }
   url.searchParams.set("secret", options.secretBase32); // Non-optional
-  setOptionalParamHelper("algorithm");
-  setOptionalParamHelper("digits");
+  setOptionalParamHelper("algorithm", options.algorithm);
+  setOptionalParamHelper("digits", options.digits);
 
   if (options.type === "totp") {
-    setOptionalParamHelper("period");
+    setOptionalParamHelper("period", options.period);
   } else {
     url.searchParams.set("counter", String(options.counter));
   }

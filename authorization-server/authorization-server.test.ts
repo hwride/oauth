@@ -50,9 +50,9 @@ test("authorization server completes an authorization request submitted with POS
     assert.equal(callbackUrl.searchParams.get("state"), "state-value-123");
 
     const authorizationCode = callbackUrl.searchParams.get("code");
-    assert.notEqual(authorizationCode, null);
+    assert.ok(authorizationCode);
     assert.equal(
-      authorizationCodeStore.loadAuthorizationCode(authorizationCode).subject,
+      authorizationCodeStore.loadAuthorizationCode(authorizationCode)!.subject,
       janeUserId,
     );
   } finally {
@@ -107,7 +107,7 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
     assert.equal(authorizationResponse.status, 302);
 
     const challengeLocation = authorizationResponse.headers.get("location");
-    assert.notEqual(challengeLocation, null);
+    assert.ok(challengeLocation);
     const challengeUrl = new URL(challengeLocation, address);
     assert.equal(challengeUrl.pathname, "/mfa-challenge-totp");
     const transactionId = challengeUrl.searchParams.get("tx");
@@ -140,14 +140,14 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
     assert.equal(callbackUrl.searchParams.get("state"), "state-value-123");
 
     const authorizationCode = callbackUrl.searchParams.get("code");
-    assert.notEqual(authorizationCode, null);
+    assert.ok(authorizationCode);
     assert.equal(
       pendingAuthorizationStore.loadPendingAuthorization(transactionId),
       undefined,
     );
     const authorizationCodeRecord =
       authorizationCodeStore.loadAuthorizationCode(authorizationCode);
-    assert.notEqual(authorizationCodeRecord, undefined);
+    assert.ok(authorizationCodeRecord);
     assert.equal(authorizationCodeRecord.clientId, clientConfig.clientId);
     assert.equal(authorizationCodeRecord.subject, testUserId);
     assert.deepEqual(authorizationCodeRecord.amr, ["pwd", "otp", "mfa"]);
@@ -342,7 +342,7 @@ test("authorization server requires credentials for prompt=login with an existin
     const code = callbackUrl.searchParams.get("code");
     assert.ok(code);
     assert.equal(
-      authorizationCodeStore.loadAuthorizationCode(code).subject,
+      authorizationCodeStore.loadAuthorizationCode(code)!.subject,
       janeUserId,
     );
   } finally {
@@ -378,10 +378,10 @@ test("max_age includes auth_time on initial and refreshed tokens", async functio
     const authorizationCode = getRedirectUrl(
       authorizationResponse,
     ).searchParams.get("code");
-    assert.notEqual(authorizationCode, null);
+    assert.ok(authorizationCode);
     const authorizationCodeRecord =
       authorizationCodeStore.loadAuthorizationCode(authorizationCode);
-    assert.notEqual(authorizationCodeRecord, undefined);
+    assert.ok(authorizationCodeRecord);
     assert.equal(authorizationCodeRecord.requiresAuthTime, true);
 
     const tokenResponse = await fetchTokenEndpoint(
@@ -500,7 +500,7 @@ test("authorization code can be issued and exchanged for an opaque access token"
       redirectUrl.toString(),
       `http://localhost:3000/callback?code=${code}`,
     );
-    assert.notEqual(code, null);
+    assert.ok(code);
     assert.equal(authorizationCodeStore.hasAuthorizationCode(code), true);
 
     const tokenResponse = await fetchTokenEndpoint(
@@ -562,7 +562,7 @@ test("authorization code can be issued and exchanged for a jwt access token veri
       redirectUrl.toString(),
       `http://localhost:3000/callback?code=${code}`,
     );
-    assert.notEqual(code, null);
+    assert.ok(code);
     assert.equal(authorizationCodeStore.hasAuthorizationCode(code), true);
 
     const tokenResponse = await fetchTokenEndpoint(
@@ -597,10 +597,10 @@ test("authorization code can be issued and exchanged for a jwt access token veri
     assert.equal(verified.payload.aud, defaultServerConfig.issuer);
     assert.equal(verified.payload.sub, janeUserId);
     assert.equal(verified.payload.client_id, "client-id-jwt");
-    assert.equal(typeof verified.payload.jti, "string");
+    assert.ok(typeof verified.payload.jti === "string");
     assert.notEqual(verified.payload.jti.length, 0);
-    assert.equal(typeof verified.payload.iat, "number");
-    assert.equal(typeof verified.payload.exp, "number");
+    assert.ok(typeof verified.payload.iat === "number");
+    assert.ok(typeof verified.payload.exp === "number");
     assert.ok(verified.payload.exp > verified.payload.iat);
 
     // Check auth code was removed.
@@ -648,13 +648,13 @@ test("authorization code flow supports PKCE and state together", async function 
     const redirectUrl = getRedirectUrl(authorizationResponse);
     const code = redirectUrl.searchParams.get("code");
 
-    assert.notEqual(code, null);
+    assert.ok(code);
     assert.equal(redirectUrl.origin, "http://localhost:3000");
     assert.equal(redirectUrl.pathname, "/callback");
     assert.equal(redirectUrl.searchParams.get("state"), state);
 
     const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
-    assert.notEqual(codeRecord, undefined);
+    assert.ok(codeRecord);
     assert.equal(codeRecord.codeChallenge, codeChallenge);
     assert.equal(codeRecord.codeChallengeMethod, "S256");
 
@@ -733,11 +733,11 @@ test("OIDC authorization code flow with nonce and email claims", async function 
 
     const redirectUrl = getRedirectUrl(authorizationResponse);
     const code = redirectUrl.searchParams.get("code");
-    assert.notEqual(code, null);
+    assert.ok(code);
     assert.equal(authorizationCodeStore.hasAuthorizationCode(code), true);
 
     const codeRecord = authorizationCodeStore.loadAuthorizationCode(code);
-    assert.notEqual(codeRecord, undefined);
+    assert.ok(codeRecord);
     assert.equal(codeRecord.scope, "openid profile email");
     assert.equal(codeRecord.nonce, nonce);
 
@@ -782,10 +782,10 @@ test("OIDC authorization code flow with nonce and email claims", async function 
     assert.equal(verifiedAccessToken.payload.sub, janeUserId);
     assert.equal(verifiedAccessToken.payload.client_id, "client-id-jwt");
     assert.equal(verifiedAccessToken.payload.scope, "openid profile email");
-    assert.equal(typeof verifiedAccessToken.payload.jti, "string");
+    assert.ok(typeof verifiedAccessToken.payload.jti === "string");
     assert.notEqual(verifiedAccessToken.payload.jti.length, 0);
-    assert.equal(typeof verifiedAccessToken.payload.iat, "number");
-    assert.equal(typeof verifiedAccessToken.payload.exp, "number");
+    assert.ok(typeof verifiedAccessToken.payload.iat === "number");
+    assert.ok(typeof verifiedAccessToken.payload.exp === "number");
     assert.ok(
       verifiedAccessToken.payload.exp > verifiedAccessToken.payload.iat,
     );
@@ -806,10 +806,10 @@ test("OIDC authorization code flow with nonce and email claims", async function 
     assert.equal(verifiedIdToken.payload.nonce, nonce);
     // auth_time is omitted when max_age was not requested.
     assert.equal(verifiedIdToken.payload.auth_time, undefined);
-    assert.equal(typeof verifiedIdToken.payload.jti, "string");
+    assert.ok(typeof verifiedIdToken.payload.jti === "string");
     assert.notEqual(verifiedIdToken.payload.jti.length, 0);
-    assert.equal(typeof verifiedIdToken.payload.iat, "number");
-    assert.equal(typeof verifiedIdToken.payload.exp, "number");
+    assert.ok(typeof verifiedIdToken.payload.iat === "number");
+    assert.ok(typeof verifiedIdToken.payload.exp === "number");
     assert.ok(verifiedIdToken.payload.exp > verifiedIdToken.payload.iat);
 
     const userinfoResponse = await fetchUserinfoEndpoint(
@@ -873,7 +873,7 @@ test("OIDC refresh token flow returns new access and ID tokens", async function 
 
     const redirectUrl = getRedirectUrl(authorizationResponse);
     const code = redirectUrl.searchParams.get("code");
-    assert.notEqual(code, null);
+    assert.ok(code);
 
     const tokenResponse = await fetchTokenEndpoint(
       address,
@@ -913,7 +913,7 @@ test("OIDC refresh token flow returns new access and ID tokens", async function 
       },
     );
     assert.deepEqual(verifiedInitialIdToken.payload.amr, ["pwd"]);
-    assert.equal(typeof verifiedInitialIdToken.payload.iat, "number");
+    assert.ok(typeof verifiedInitialIdToken.payload.iat === "number");
 
     // Sleep long enough that iat will change for ID tokens.
     await sleep(1100);
@@ -955,7 +955,7 @@ test("OIDC refresh token flow returns new access and ID tokens", async function 
     );
 
     assert.deepEqual(verifiedRefreshIdToken.payload.amr, ["pwd"]);
-    assert.equal(typeof verifiedRefreshIdToken.payload.iat, "number");
+    assert.ok(typeof verifiedRefreshIdToken.payload.iat === "number");
     assert.ok(
       verifiedRefreshIdToken.payload.iat > verifiedInitialIdToken.payload.iat,
     );
@@ -1000,7 +1000,7 @@ test("signup route preserves prompt and creates a user who can then log in and r
     assert.equal(signupRedirect.pathname, "/authorize");
     assert.equal(signupRedirect.searchParams.get("prompt"), "login");
     const newUser = userStore.loadUserByUsername("new-user");
-    assert.notEqual(newUser, undefined);
+    assert.ok(newUser);
     assert.equal(isUuidV4(newUser.userId), true);
     assert.equal(newUser.password, "new-password");
     assert.equal(newUser.name, "New User");
@@ -1020,7 +1020,7 @@ test("signup route preserves prompt and creates a user who can then log in and r
 
     const redirectUrl = getRedirectUrl(authorizationResponse);
     const code = redirectUrl.searchParams.get("code");
-    assert.notEqual(code, null);
+    assert.ok(code);
     assert.equal(authorizationCodeStore.hasAuthorizationCode(code), true);
 
     const tokenResponse = await fetchTokenEndpoint(
@@ -1058,10 +1058,10 @@ test("signup route preserves prompt and creates a user who can then log in and r
     assert.equal(verified.payload.sub, newUser.userId);
     assert.notEqual(verified.payload.sub, newUser.username);
     assert.equal(verified.payload.client_id, "client-id-jwt");
-    assert.equal(typeof verified.payload.jti, "string");
+    assert.ok(typeof verified.payload.jti === "string");
     assert.notEqual(verified.payload.jti.length, 0);
-    assert.equal(typeof verified.payload.iat, "number");
-    assert.equal(typeof verified.payload.exp, "number");
+    assert.ok(typeof verified.payload.iat === "number");
+    assert.ok(typeof verified.payload.exp === "number");
     assert.ok(verified.payload.exp > verified.payload.iat);
 
     assert.equal(authorizationCodeStore.hasAuthorizationCode(code), false);
@@ -1125,9 +1125,11 @@ async function authorizeClient(
   assert.equal(loginPageResponse.status, 200);
 
   // Submit the login form.
-  const action = (await loginPageResponse.text()).match(
+  const actionMatch = (await loginPageResponse.text()).match(
     /<form method="post" action="([^"]+)"/,
-  )[1];
+  );
+  assert.ok(actionMatch);
+  const action = actionMatch[1];
   const loginRequestBody = new URLSearchParams({
     username: credentials.username,
     password: credentials.password,
@@ -1215,7 +1217,7 @@ async function submitSignupForm(
 
 function getRedirectUrl(response: Response) {
   const location = response.headers.get("location");
-  assert.notEqual(location, null);
+  assert.ok(location);
   return new URL(location);
 }
 

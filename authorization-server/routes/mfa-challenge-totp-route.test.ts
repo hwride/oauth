@@ -91,6 +91,7 @@ test("POST TOTP MFA challenge route accepts an OTP code", async () => {
     );
     const sessionId = sessionCookieMatch?.groups?.sessionId;
     assert.ok(sessionCookieMatch, "session cookie should match");
+    assert.ok(sessionId);
     assert.ok(isUuidV4(sessionId), "cookie should have a UUIDv4 session ID");
 
     const session = routeDependencies.sessionStore.loadSession(sessionId);
