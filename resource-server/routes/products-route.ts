@@ -3,7 +3,7 @@ import {
   authenticateAccessToken,
   type AccessTokenVerificationConfig,
 } from "../utils/access-token-auth.ts";
-import { hasScope } from "../utils/has-scope.ts";
+import { hasScope } from "../utils/token-utils.ts";
 import type { ResourceServerConfig } from "../config.ts";
 import type { ProductStore } from "../stores/product-store.ts";
 

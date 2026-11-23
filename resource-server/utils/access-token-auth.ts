@@ -26,7 +26,9 @@ export async function authenticateAccessToken(
   request: FastifyRequest,
   reply: FastifyReply,
   verificationConfig: AccessTokenVerificationConfig,
-): Promise<{ sub: string; scope?: string } | undefined> {
+): Promise<
+  { sub: string; scope?: string; acr?: string; authTime?: number } | undefined
+> {
   const token = extractBearerToken(request.headers.authorization);
 
   if (!token) {
@@ -43,7 +45,15 @@ export async function authenticateAccessToken(
     }
 
     const scope = typeof payload.scope === "string" ? payload.scope : undefined;
-    return { sub: payload.sub, scope };
+    const acr = typeof payload.acr === "string" ? payload.acr : undefined;
+    const authTime =
+      typeof payload.auth_time === "number" ? payload.auth_time : undefined;
+    return {
+      sub: payload.sub,
+      scope,
+      acr,
+      authTime,
+    };
   } catch (e) {
     // Note you wouldn't normally expose this level of info in the response.
     // But as this is a test server, it's convenient.

@@ -65,6 +65,10 @@ function logResourceServerConfig(
     {
       port: getResourceServerPort(),
       resourceIds: serverConfig.resourceIds,
+      highValueOrderPence: serverConfig.highValueOrderPence,
+      highValueOrderAcr: serverConfig.highValueOrderAcr,
+      highValueOrderMaxAuthAgeSeconds:
+        serverConfig.highValueOrderMaxAuthAgeSeconds,
       acceptedAccessTokenAlgorithms: serverConfig.acceptedAccessTokenAlgorithms,
       authServerBase: serverConfig.authServerBase,
       issuer: serverConfig.issuer,

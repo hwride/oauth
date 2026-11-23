@@ -4,6 +4,12 @@ export type ResourceServerConfig = {
     ordersApi: string;
     productsApi: string;
   };
+  /** Value in pence for an order to be considered high value. */
+  highValueOrderPence: number;
+  /** The acr required to view a high value order. */
+  highValueOrderAcr: string;
+  /** Maximum age in seconds of the authentication event for a high value order. */
+  highValueOrderMaxAuthAgeSeconds: number;
   acceptedAccessTokenAlgorithms: string[];
   authServerBase: string;
   issuer: string;
@@ -46,6 +52,9 @@ export async function getResourceServerConfig(): Promise<ResourceServerConfig> {
       ordersApi: "https://orders-api.example.test",
       productsApi: "https://products-api.example.test",
     },
+    highValueOrderPence: 100 * 50,
+    highValueOrderAcr: "https://orders-api.example.test/acr/level-2",
+    highValueOrderMaxAuthAgeSeconds: 60,
     acceptedAccessTokenAlgorithms: ["RS256"],
     authServerBase,
     issuer: metadata.issuer,

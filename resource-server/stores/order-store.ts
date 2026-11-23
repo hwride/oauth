@@ -1,6 +1,7 @@
 export type OrderRecord = {
   orderId: string;
   userId: string;
+  valuePence: number;
 };
 
 export type OrderStore = {
@@ -44,9 +45,9 @@ export const janeUserId = "00000000-0000-0000-0000-000000000002";
 
 export function createDefaultOrderStore() {
   return createOrderStore([
-    { orderId: "order-001", userId: testUserId },
-    { orderId: "order-002", userId: testUserId },
-    { orderId: "order-003", userId: janeUserId },
-    { orderId: "order-004", userId: janeUserId },
+    { orderId: "order-001", userId: testUserId, valuePence: 100 },
+    { orderId: "order-002", userId: testUserId, valuePence: 100 * 100 },
+    { orderId: "order-003", userId: janeUserId, valuePence: 100 * 5 },
+    { orderId: "order-004", userId: janeUserId, valuePence: 100 * 20 },
   ]);
 }
