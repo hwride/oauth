@@ -193,6 +193,10 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
     );
     assert.deepEqual(verifiedIdToken.payload.amr, ["pwd", "otp", "mfa"]);
     assert.equal(
+      verifiedIdToken.payload.acr,
+      "https://issuer.example.test/acr/level-2",
+    );
+    assert.equal(
       verifiedIdToken.payload.auth_time,
       Math.floor(authorizationCodeRecord.authTime / 1000),
     );

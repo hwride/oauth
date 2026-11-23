@@ -412,7 +412,7 @@ test("POST token endpoint stores auth context with an opaque access token", asyn
     authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code")
       ?.authorizationCode.record;
   assert.ok(authorizationCodeRecord);
-  authorizationCodeRecord.amr = ["pwd", "otp"];
+  authorizationCodeRecord.amr = ["pwd", "otp", "mfa"];
   authorizationCodeRecord.authTime = 1_700_000_123_456;
   authorizationCodeRecord.requiresAuthTime = true;
 
@@ -433,7 +433,8 @@ test("POST token endpoint stores auth context with an opaque access token", asyn
   assert.deepEqual(tokenStore.loadAccessToken(tokenResponse.access_token), {
     type: "opaque",
     clientId: "client-id-opaque",
-    amr: ["pwd", "otp"],
+    amr: ["pwd", "otp", "mfa"],
+    acr: "https://issuer.example.test/acr/level-2",
     authTime: 1_700_000_123,
   });
 });
@@ -929,7 +930,7 @@ test("POST token endpoint includes auth context claims in a jwt access token", a
     authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code")
       ?.authorizationCode.record;
   assert.ok(authorizationCodeRecord);
-  authorizationCodeRecord.amr = ["pwd", "otp"];
+  authorizationCodeRecord.amr = ["pwd", "otp", "mfa"];
   authorizationCodeRecord.authTime = 1_700_000_123_456;
   authorizationCodeRecord.requiresAuthTime = true;
 
@@ -956,7 +957,8 @@ test("POST token endpoint includes auth context claims in a jwt access token", a
     },
   );
 
-  assert.deepEqual(verified.payload.amr, ["pwd", "otp"]);
+  assert.deepEqual(verified.payload.amr, ["pwd", "otp", "mfa"]);
+  assert.equal(verified.payload.acr, "https://issuer.example.test/acr/level-2");
   assert.equal(verified.payload.auth_time, 1_700_000_123);
 });
 

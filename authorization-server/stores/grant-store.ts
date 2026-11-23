@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
+import type { AuthenticationContextClassReference } from "../types/authentication-context-class-reference.ts";
 
 export type GrantState = "pending" | "active" | "revoked";
 
@@ -45,6 +46,7 @@ export type AccessTokenRecord =
       clientId: string;
       scope?: string;
       amr?: AuthenticationMethodReference[];
+      acr?: AuthenticationContextClassReference;
       /** Unix time in seconds (not ms) */
       authTime?: number;
     };

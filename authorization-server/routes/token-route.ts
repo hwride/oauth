@@ -6,6 +6,8 @@ import { type ClientConfig, clientsConfig } from "../config/clients-config.ts";
 import type { ServerConfig } from "../config/server-config.ts";
 import type { AccessTokenRecord, GrantStore } from "../stores/grant-store.ts";
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
+import type { AuthenticationContextClassReference } from "../types/authentication-context-class-reference.ts";
+import { getAcrLevel2 } from "../utils/authentication-context-utils.ts";
 import { hasOpenIdScope } from "../utils/oidc-utils.ts";
 import { hasScope } from "../utils/oauth-utils.ts";
 
@@ -496,6 +498,10 @@ async function generateAccessToken({
     if (amr) {
       accessTokenRecord.amr = amr;
     }
+    const acr = getAcrForAuthentication(serverConfig.issuer, amr);
+    if (acr) {
+      accessTokenRecord.acr = acr;
+    }
     if (authTime != null) {
       accessTokenRecord.authTime = authTime;
     }
@@ -510,6 +516,8 @@ async function generateAccessToken({
   else {
     // JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens
     // https://datatracker.ietf.org/doc/html/rfc9068
+    // Section 2.2.1 defines the optional auth_time, acr, and amr authentication information claims.
+    // https://www.rfc-editor.org/rfc/rfc9068.html#section-2.2.1
     const payload: JWTPayload = {
       iss: serverConfig.issuer,
       aud: getAccessTokenAudience(serverConfig.issuer, scope, resource),
@@ -520,6 +528,10 @@ async function generateAccessToken({
 
     if (amr) {
       payload.amr = amr;
+    }
+    const acr = getAcrForAuthentication(serverConfig.issuer, amr);
+    if (acr) {
+      payload.acr = acr;
     }
     if (authTime != null) {
       payload.auth_time = authTime;
@@ -574,6 +586,10 @@ async function generateIdToken({
     // https://openid.net/specs/openid-connect-core-1_0.html#IDToken
     idTokenPayload.amr = amr;
   }
+  const acr = getAcrForAuthentication(serverConfig.issuer, amr);
+  if (acr) {
+    idTokenPayload.acr = acr;
+  }
   if (authTime != null) {
     idTokenPayload.auth_time = authTime;
   }
@@ -603,6 +619,17 @@ function getAccessTokenAudience(
   }
 
   return issuer;
+}
+
+function getAcrForAuthentication(
+  issuer: string,
+  amr: AuthenticationMethodReference[] | undefined,
+): AuthenticationContextClassReference | undefined {
+  if (!amr?.includes("mfa")) {
+    return undefined;
+  }
+
+  return getAcrLevel2(issuer);
 }
 
 function getNowSeconds() {

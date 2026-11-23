@@ -53,11 +53,15 @@ export async function getResourceServerConfig(): Promise<ResourceServerConfig> {
       productsApi: "https://products-api.example.test",
     },
     highValueOrderPence: 100 * 50,
-    highValueOrderAcr: "https://orders-api.example.test/acr/level-2",
+    highValueOrderAcr: getHighValueOrderAcr(metadata.issuer),
     highValueOrderMaxAuthAgeSeconds: 60,
     acceptedAccessTokenAlgorithms: ["RS256"],
     authServerBase,
     issuer: metadata.issuer,
     jwksUri: metadata.jwks_uri,
   };
+}
+
+function getHighValueOrderAcr(issuer: string): string {
+  return `${new URL(issuer).origin}/acr/level-2`;
 }

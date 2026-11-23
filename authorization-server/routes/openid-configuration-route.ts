@@ -1,5 +1,6 @@
 import type { ServerContext } from "../server-context.ts";
 import type { FastifyInstance } from "fastify";
+import { getAcrLevel2 } from "../utils/authentication-context-utils.ts";
 import { oidcScopes, oidcStandardClaims } from "../utils/oidc-utils.ts";
 
 export function registerOpenIdConfigurationRoute(
@@ -24,6 +25,7 @@ export function registerOpenIdConfigurationRoute(
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code", "refresh_token"],
       code_challenge_methods_supported: ["S256", "plain"],
+      acr_values_supported: [getAcrLevel2(serverConfig.issuer)],
       subject_types_supported: ["public"],
       id_token_signing_alg_values_supported: [serverConfig.jwtSigningAlg],
       userinfo_signing_alg_values_supported: ["none"], // We currently only return plain JSON from /userinfo
@@ -35,10 +37,11 @@ export function registerOpenIdConfigurationRoute(
         "iat",
         "exp",
         "jti",
+        "acr",
+        "amr",
         // Included on ID token and /userinfo endpoint
         ...oidcStandardClaims,
         // ID token only
-        "amr",
         "nonce",
         // JWT access token only
         "client_id",
