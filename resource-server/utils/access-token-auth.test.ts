@@ -89,6 +89,7 @@ test("authenticateAccessToken returns the token subject when bearer token is val
       sub: "user-123",
       scope: undefined,
       acr: undefined,
+      authTime: undefined,
     });
     assert.equal(response.statusCode, undefined);
     assert.deepEqual(response.headers, {});
@@ -123,6 +124,7 @@ test("authenticateAccessToken returns the token scope when bearer token scope is
       sub: "user-123",
       scope: "orders:read",
       acr: undefined,
+      authTime: undefined,
     });
     assert.equal(response.statusCode, undefined);
     assert.deepEqual(response.headers, {});
@@ -157,6 +159,7 @@ test("authenticateAccessToken returns the token acr when an acr claim is present
       sub: "user-123",
       scope: undefined,
       acr: "https://orders-api.example.test/acr/level-2",
+      authTime: undefined,
     });
     assert.equal(response.statusCode, undefined);
     assert.deepEqual(response.headers, {});

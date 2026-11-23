@@ -209,6 +209,239 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
   }
 });
 
+test("MFA authorization flow honors acr_values and max_age", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const pendingAuthorizationStore = createPendingAuthorizationStore();
+  const clientConfig = clientsConfig.find(
+    (client) => client.clientId === "client-id-opaque",
+  );
+  assert.ok(clientConfig);
+  const user = defaultUsers().find((user) => user.userId === testUserId);
+  assert.ok(user);
+  const totpMfaRegistration = user.mfaRegistrations?.find(
+    (registration) => registration.type === "TOTP",
+  );
+  assert.ok(totpMfaRegistration);
+  const codeVerifier = "acr-code-verifier";
+  const acr = "https://issuer.example.test/acr/level-2";
+
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
+    pendingAuthorizationStore,
+    grantStore: authorizationCodeStore,
+  });
+  const address = await fastify.listen({
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const authorizationResponse = await authorizeClient(
+      address,
+      clientConfig.clientId,
+      {
+        credentials: {
+          username: "user",
+          password: "password",
+        },
+        authorizationRequest: {
+          scope: "openid",
+          state: "acr-state",
+          nonce: "acr-nonce",
+          acr_values: acr,
+          max_age: "60",
+          code_challenge: createS256CodeChallenge(codeVerifier),
+          code_challenge_method: "S256",
+        },
+      },
+    );
+    assert.equal(authorizationResponse.status, 302);
+
+    const challengeLocation = authorizationResponse.headers.get("location");
+    assert.ok(challengeLocation);
+    const challengeUrl = new URL(challengeLocation, address);
+    assert.equal(challengeUrl.pathname, "/mfa-challenge-totp");
+    const transactionId = challengeUrl.searchParams.get("tx");
+    assert.ok(transactionId);
+    assert.equal(isUuidV4(transactionId), true);
+
+    const pendingAuthorization =
+      pendingAuthorizationStore.loadPendingAuthorization(transactionId);
+    assert.ok(pendingAuthorization);
+    assert.equal(pendingAuthorization.stage, "mfa");
+    assert.equal(pendingAuthorization.userId, testUserId);
+    assert.deepEqual(pendingAuthorization.amr, ["pwd"]);
+    assert.equal(pendingAuthorization.requiresAuthTime, true);
+    assert.equal(pendingAuthorization.authorizationRequest.acrValues, acr);
+
+    const { code } = await timeBasedOneTimePasswordCode({
+      key: fromBase32(totpMfaRegistration.secretBase32),
+      hashAlgorithm: totpConfig.algorithm,
+      codeType: "numeric",
+      codeLength: totpConfig.digits,
+      timeStepSeconds: totpConfig.period,
+    });
+    const mfaResponse = await fetch(
+      `${address}${challengeUrl.pathname}${challengeUrl.search}`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ code }).toString(),
+        redirect: "manual",
+      },
+    );
+
+    assert.equal(mfaResponse.status, 302);
+    const callbackUrl = getRedirectUrl(mfaResponse);
+    assert.equal(callbackUrl.searchParams.get("state"), "acr-state");
+    const authorizationCode = callbackUrl.searchParams.get("code");
+    assert.ok(authorizationCode);
+    const authorizationCodeRecord =
+      authorizationCodeStore.loadAuthorizationCode(authorizationCode);
+    assert.ok(authorizationCodeRecord);
+    assert.equal(authorizationCodeRecord.subject, testUserId);
+    assert.deepEqual(authorizationCodeRecord.amr, ["pwd", "otp", "mfa"]);
+    assert.equal(authorizationCodeRecord.requiresAuthTime, true);
+    assert.equal(typeof authorizationCodeRecord.authTime, "number");
+
+    const tokenResponse = await fetchTokenEndpoint(
+      address,
+      authorizationCode,
+      clientConfig.clientId,
+      "test-client-secret",
+      { code_verifier: codeVerifier },
+    );
+    assert.equal(tokenResponse.status, 200);
+    const tokenResponseBody = (await tokenResponse.json()) as {
+      id_token: string;
+    };
+    const verifiedIdToken = await jwtVerify(
+      tokenResponseBody.id_token,
+      defaultServerConfig.signingKey.publicKey,
+      {
+        algorithms: ["RS256"],
+        issuer: defaultServerConfig.issuer,
+        audience: clientConfig.clientId,
+      },
+    );
+    assert.deepEqual(verifiedIdToken.payload.amr, ["pwd", "otp", "mfa"]);
+    assert.equal(verifiedIdToken.payload.acr, acr);
+    assert.equal(
+      verifiedIdToken.payload.auth_time,
+      Math.floor(authorizationCodeRecord.authTime / 1000),
+    );
+  } finally {
+    await fastify.close();
+  }
+});
+
+test("authorization server performs MFA-only step-up for an existing session", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const pendingAuthorizationStore = createPendingAuthorizationStore();
+  const user = defaultUsers().find((user) => user.userId === testUserId);
+  assert.ok(user);
+  const totpMfaRegistration = user.mfaRegistrations?.find(
+    (registration) => registration.type === "TOTP",
+  );
+  assert.ok(totpMfaRegistration);
+  const acr = "https://issuer.example.test/acr/level-2";
+
+  const fastify = await createServer({
+    serverConfig: defaultServerConfig,
+    pendingAuthorizationStore,
+    grantStore: authorizationCodeStore,
+  });
+  const address = await fastify.listen({
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  try {
+    const initialLoginResponse = await authorizeClient(
+      address,
+      "client-id-opaque",
+      {
+        credentials: {
+          username: "user",
+          password: "password",
+        },
+      },
+    );
+    assert.equal(initialLoginResponse.status, 302);
+    const setCookies = initialLoginResponse.headers.getSetCookie();
+    assert.equal(setCookies.length, 1);
+    const sessionCookie = setCookies[0].split(";", 1)[0];
+
+    const authorizationPath = new URL(defaultServerConfig.authorizationEndpoint)
+      .pathname;
+    const authorizationUrl = `${address}${authorizationPath}?${new URLSearchParams(
+      {
+        client_id: "client-id-opaque",
+        response_type: "code",
+        redirect_uri: "http://localhost:3000/callback",
+        scope: "openid",
+        state: "step-up-state",
+        nonce: "step-up-nonce",
+        acr_values: acr,
+      },
+    )}`;
+    const stepUpResponse = await fetch(authorizationUrl, {
+      headers: {
+        cookie: sessionCookie,
+      },
+      redirect: "manual",
+    });
+    assert.equal(stepUpResponse.status, 302);
+
+    const challengeLocation = stepUpResponse.headers.get("location");
+    assert.ok(challengeLocation);
+    const challengeUrl = new URL(challengeLocation, address);
+    assert.equal(challengeUrl.pathname, "/mfa-challenge-totp");
+    const transactionId = challengeUrl.searchParams.get("tx");
+    assert.ok(transactionId);
+    const pendingAuthorization =
+      pendingAuthorizationStore.loadPendingAuthorization(transactionId);
+    assert.ok(pendingAuthorization);
+    assert.equal(pendingAuthorization.stage, "mfa");
+    assert.equal(pendingAuthorization.userId, testUserId);
+    assert.deepEqual(pendingAuthorization.amr, ["pwd"]);
+
+    const { code } = await timeBasedOneTimePasswordCode({
+      key: fromBase32(totpMfaRegistration.secretBase32),
+      hashAlgorithm: totpConfig.algorithm,
+      codeType: "numeric",
+      codeLength: totpConfig.digits,
+      timeStepSeconds: totpConfig.period,
+    });
+    const mfaResponse = await fetch(
+      `${address}${challengeUrl.pathname}${challengeUrl.search}`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ code }).toString(),
+        redirect: "manual",
+      },
+    );
+
+    assert.equal(mfaResponse.status, 302);
+    const callbackUrl = getRedirectUrl(mfaResponse);
+    assert.equal(callbackUrl.searchParams.get("state"), "step-up-state");
+    const authorizationCode = callbackUrl.searchParams.get("code");
+    assert.ok(authorizationCode);
+    const authorizationCodeRecord =
+      authorizationCodeStore.loadAuthorizationCode(authorizationCode);
+    assert.ok(authorizationCodeRecord);
+    assert.equal(authorizationCodeRecord.subject, testUserId);
+    assert.deepEqual(authorizationCodeRecord.amr, ["pwd", "otp", "mfa"]);
+  } finally {
+    await fastify.close();
+  }
+});
+
 test("authorization server reuses a session without requiring credentials", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const fastify = await createServer({

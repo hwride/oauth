@@ -417,6 +417,37 @@ test("GET authorization endpoint rejects prompt=none when max_age is stale", asy
   );
 });
 
+test("GET authorization endpoint does not start step-up MFA for prompt=none", async function () {
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
+  const session = sessionStore.newSession({
+    userId: janeUserId,
+    amr: ["pwd"],
+    authTime: Date.now(),
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      state: "state-value-123",
+      prompt: "none",
+      acr_values: "https://issuer.example.test/acr/level-2",
+    },
+    defaultServerConfig,
+    createAuthorizationCodeStore(),
+    undefined,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 302);
+  assert.deepEqual(Object.fromEntries(getRedirectUrl(response).searchParams), {
+    error: "login_required",
+    error_description: "Login is required",
+    state: "state-value-123",
+  });
+});
+
 test("GET authorization endpoint rejects prompt=none with another prompt", async function () {
   const response = await fetchAuthorizationLoginPage({
     client_id: "client-id-opaque",
@@ -579,6 +610,30 @@ test("POST authorization endpoint skips MFA when the user disables it", async fu
   assert.ok(authorizationCodeRecord);
   assert.equal(authorizationCodeRecord.subject, testUserId);
   assert.deepEqual(authorizationCodeRecord.amr, ["pwd"]);
+});
+
+test("POST authorization endpoint does not prompt MFA for an unsupported acr_values value", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const response = await submitAuthorizationLogin(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      scope: "openid",
+      acr_values: "https://issuer.example.test/acr/level-1",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    { username: "user", password: "password" },
+  );
+
+  assert.equal(response.status, 302);
+  const authorizationCode = getRedirectUrl(response).searchParams.get("code");
+  assert.ok(authorizationCode);
+  assert.equal(
+    authorizationCodeStore.loadAuthorizationCode(authorizationCode)?.subject,
+    testUserId,
+  );
 });
 
 test("POST authorization endpoint prompts for MFA when acr_values requests level 2", async function () {
@@ -1386,7 +1441,7 @@ async function submitAuthorizationLogin(
 function getRedirectUrl(response: Response) {
   const location = response.headers.get("location");
   assert.ok(location);
-  return new URL(location);
+  return new URL(location, "http://localhost");
 }
 
 function createUserStoreWithoutMfa() {
