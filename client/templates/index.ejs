@@ -73,6 +73,15 @@
         flex-basis: 100%;
       }
 
+      .acr-values-row {
+        width: 100%;
+      }
+
+      .acr-values-row #acr-values-input {
+        flex: 1;
+        min-width: 0;
+      }
+
       table {
         border-collapse: collapse;
       }
@@ -240,6 +249,20 @@
             phone
           </label>
         </fieldset>
+        <label class="acr-values-row">
+          <input
+            type="checkbox"
+            id="acr-values-checkbox"
+            <%= useDefaultAcrValues ? "checked" : "" %>
+          />
+          Use acr_values?
+          <input
+            type="text"
+            id="acr-values-input"
+            placeholder="https://issuer.example.com/acr/level-2"
+            value="<%= defaultAcrValues %>"
+          />
+        </label>
         <label>
           <input type="checkbox" id="nonce-checkbox" checked />
           Use nonce?
@@ -385,6 +408,8 @@
       const oidc = {
         fieldset: document.getElementById("oidc-fieldset"),
         openidScopeCheckbox: document.getElementById("openid-scope-checkbox"),
+        acrValuesCheckbox: document.getElementById("acr-values-checkbox"),
+        acrValuesInput: document.getElementById("acr-values-input"),
         nonceCheckbox: document.getElementById("nonce-checkbox"),
         maxAgeCheckbox: document.getElementById("max-age-checkbox"),
         maxAgeInput: document.getElementById("max-age-input"),
@@ -495,6 +520,12 @@
             const loginHint = oidc.loginHintInput.value.trim();
             if (loginHint) {
               queryParams.set("login_hint", loginHint);
+            }
+          }
+          if (oidc.acrValuesCheckbox.checked) {
+            const acrValues = oidc.acrValuesInput.value.trim();
+            if (acrValues) {
+              queryParams.set("acr_values", acrValues);
             }
           }
         }
@@ -662,6 +693,7 @@
           [
             oidc.openidScopeCheckbox,
             ...oidcScopeCheckboxes,
+            oidc.acrValuesCheckbox,
             oidc.nonceCheckbox,
             oidc.maxAgeCheckbox,
             oidc.promptCheckbox,
@@ -676,7 +708,7 @@
           updateAuthorizeLink,
         );
         addListeners(
-          [oidc.maxAgeInput, oidc.loginHintInput],
+          [oidc.acrValuesInput, oidc.maxAgeInput, oidc.loginHintInput],
           "input",
           updateAuthorizeLink,
         );

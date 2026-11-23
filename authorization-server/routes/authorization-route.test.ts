@@ -145,6 +145,36 @@ test("GET authorization endpoint reuses a fresh session for max_age and save aut
   assert.equal(codeRecord.authTime, session.authTime);
 });
 
+test("GET authorization endpoint does not reuse a non-MFA session for level 2 acr_values", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
+  const session = sessionStore.newSession({
+    userId: janeUserId,
+    amr: ["pwd"],
+    authTime: Date.now(),
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      acr_values: "https://issuer.example.test/acr/level-2",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    undefined,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /<form method="post"/);
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
+});
+
 test("GET authorization endpoint requires login for a stale max_age session", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
@@ -506,6 +536,25 @@ test("POST authorization endpoint skips MFA when the user disables it", async fu
   assert.ok(authorizationCodeRecord);
   assert.equal(authorizationCodeRecord.subject, testUserId);
   assert.deepEqual(authorizationCodeRecord.amr, ["pwd"]);
+});
+
+test("POST authorization endpoint prompts for MFA when acr_values requests level 2", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const response = await submitAuthorizationLogin(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      scope: "openid",
+      acr_values: "https://issuer.example.test/acr/level-2",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    { username: "user", password: "password" },
+  );
+
+  assert.equal(response.status, 302);
+  assert.equal(getRedirectUrl(response).pathname, "/mfa-challenge-totp");
 });
 
 test("POST authorization endpoint enforces MFA by default when the user flag is undefined", async function () {

@@ -5,3 +5,10 @@ export function getAcrLevel2(
 ): AuthenticationContextClassReference {
   return `${new URL(issuer).origin}/acr/level-2`;
 }
+
+export function hasAcr(
+  acrValues: string | undefined,
+  expectedAcr: AuthenticationContextClassReference,
+): boolean {
+  return acrValues?.split(/\s+/).includes(expectedAcr) ?? false;
+}

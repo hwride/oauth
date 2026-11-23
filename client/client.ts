@@ -47,6 +47,7 @@ function logClientConfig(fastify: FastifyInstance) {
       defaultResource: process.env.DEFAULT_RESOURCE,
       defaultAudience: process.env.DEFAULT_AUDIENCE,
       defaultScopes: process.env.DEFAULT_SCOPES,
+      defaultAcrValues: process.env.DEFAULT_ACR_VALUES,
     },
     "Client config",
   );

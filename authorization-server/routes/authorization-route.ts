@@ -20,6 +20,7 @@ import {
   getSessionCookieClear,
   loadSessionFromCookie,
 } from "../utils/session-utils.ts";
+import { getAcrLevel2, hasAcr } from "../utils/authentication-context-utils.ts";
 
 /**
  * Parameter for OAuth authorization request or OIDC authentication request.
@@ -35,6 +36,7 @@ type AuthorizeParams = {
   code_challenge_method?: string;
   resource?: string;
   max_age?: string;
+  acr_values?: string;
   prompt?: string;
   request?: string;
 };
@@ -199,7 +201,8 @@ export function registerAuthorizationRoute(
 
     // Challenge MFA when enabled and the authenticated user has a registered TOTP factor.
     if (
-      (user.enforceMfaAtLogin ?? true) &&
+      ((user.enforceMfaAtLogin ?? true) ||
+        hasRequestedLevel2Acr(authorizationRequest, serverConfig.issuer)) &&
       user.mfaRegistrations?.some(
         (registration) => registration.type === "TOTP",
       )
@@ -377,6 +380,9 @@ function validateAuthorizationRequest(
     state: params.state,
     resource: requestedResource,
   };
+  if (params.acr_values != null) {
+    authorizationRequest.acrValues = params.acr_values;
+  }
 
   // Expose PKCE data. https://datatracker.ietf.org/doc/html/rfc7636
   if (params.code_challenge) {
@@ -476,6 +482,10 @@ function handleAuthorizationRequest({
   userStore: ServerContext["userStore"];
 }) {
   const { maxAge, prompt } = authorizationRequest;
+  const requiresMfa = hasRequestedLevel2Acr(
+    authorizationRequest,
+    serverConfig.issuer,
+  );
   const requiresAuthTime = maxAge != null;
 
   // If there's an existing auth server session and it passes max_age requirements, we can skip authentication and
@@ -486,6 +496,10 @@ function handleAuthorizationRequest({
 
     // Force a fresh-auth here.
     if (maxAge === 0 || prompt?.includes("login")) {
+      canUseSession = false;
+    }
+    // A level-2 request requires a session established with MFA.
+    else if (requiresMfa && !sessionResult.session.amr.includes("mfa")) {
       canUseSession = false;
     }
     // Otherwise if max_age was included, check if our session passes the freshness check.
@@ -545,6 +559,13 @@ function handleAuthorizationRequest({
     );
 }
 
+function hasRequestedLevel2Acr(
+  authorizationRequest: AuthorizationRequest,
+  issuer: string,
+): boolean {
+  return hasAcr(authorizationRequest.acrValues, getAcrLevel2(issuer));
+}
+
 function renderLoginPage(
   loginEndpointPath: string,
   authorizationRequest: AuthorizationRequest,
@@ -577,6 +598,7 @@ function renderLoginPage(
   setIfExists("codeChallengeMethod", "code_challenge_method");
   setIfExists("resource", "resource");
   setIfExists("maxAge", "max_age");
+  setIfExists("acrValues", "acr_values");
   if (authorizationRequest.prompt != null) {
     signupPathSearchParams.set("prompt", authorizationRequest.prompt.join(" "));
   }

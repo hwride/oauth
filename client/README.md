@@ -16,6 +16,7 @@ An OAuth Client. Mainly implemented for testing and learning. Not for use in pro
 - `DEFAULT_RESOURCE` to prefill the API resource field
 - `DEFAULT_AUDIENCE` to prefill the API audience field
 - `DEFAULT_SCOPES` to select known scope checkboxes and prefill additional scopes
+- `DEFAULT_ACR_VALUES` to prefill the OpenID Connect `acr_values` field
 
 1. Start the development server:
 
