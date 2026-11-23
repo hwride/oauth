@@ -197,8 +197,9 @@ export function registerAuthorizationRoute(
     }
     const authTime = Date.now();
 
-    // Challenge MFA when the authenticated user has a registered TOTP factor.
+    // Challenge MFA when enabled and the authenticated user has a registered TOTP factor.
     if (
+      (user.enforceMfaAtLogin ?? true) &&
       user.mfaRegistrations?.some(
         (registration) => registration.type === "TOTP",
       )

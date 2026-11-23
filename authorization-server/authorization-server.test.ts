@@ -4,7 +4,12 @@ import test from "node:test";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { createGrantStore as createAuthorizationCodeStore } from "./stores/grant-store.ts";
 import { createServer } from "./server.ts";
-import { defaultUsers, janeUserId, testUserId } from "./default-users.ts";
+import {
+  adminUserId,
+  defaultUsers,
+  janeUserId,
+  testUserId,
+} from "./default-users.ts";
 import { getTestServerConfig } from "./test/test-utils.ts";
 import { createUserStore } from "./stores/user-store.ts";
 import { isUuidV4 } from "./utils/uuid.ts";
@@ -67,9 +72,9 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
     (client) => client.clientId === "client-id-opaque",
   );
   assert.ok(clientConfig);
-  const testUser = defaultUsers().find((user) => user.userId === testUserId);
-  assert.ok(testUser);
-  const totpMfaRegistration = testUser.mfaRegistrations?.find(
+  const adminUser = defaultUsers().find((user) => user.userId === adminUserId);
+  assert.ok(adminUser);
+  const totpMfaRegistration = adminUser.mfaRegistrations?.find(
     (registration) => registration.type === "TOTP",
   );
   assert.ok(totpMfaRegistration);
@@ -91,7 +96,7 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
       clientConfig.clientId,
       {
         credentials: {
-          username: "user",
+          username: "admin",
           password: "password",
         },
         authorizationRequest: {
@@ -149,7 +154,7 @@ test("MFA authorization flow completes TOTP challenge and preserves the transact
       authorizationCodeStore.loadAuthorizationCode(authorizationCode);
     assert.ok(authorizationCodeRecord);
     assert.equal(authorizationCodeRecord.clientId, clientConfig.clientId);
-    assert.equal(authorizationCodeRecord.subject, testUserId);
+    assert.equal(authorizationCodeRecord.subject, adminUserId);
     assert.deepEqual(authorizationCodeRecord.amr, ["pwd", "otp", "mfa"]);
     assert.equal(authorizationCodeRecord.requiresAuthTime, true);
     assert.equal(typeof authorizationCodeRecord.authTime, "number");
