@@ -12,6 +12,7 @@ export function defaultUsers(): UserRecord[] {
       password: "password",
       name: "John Wick",
       roles: ["admin"],
+      enforceMfaAtLogin: true,
       mfaRegistrations: [
         {
           type: "TOTP",
@@ -25,6 +26,7 @@ export function defaultUsers(): UserRecord[] {
       password: "password",
       name: "John Smith",
       roles: ["customer"],
+      enforceMfaAtLogin: false,
       mfaRegistrations: [
         {
           type: "TOTP",

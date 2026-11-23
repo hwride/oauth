@@ -12,18 +12,30 @@ test("createOrderStore starts empty by default", function () {
 
 test("createOrderStore allows loading orders by id and user id", function () {
   const orderStore = createOrderStore([
-    { orderId: "existing-order-id", userId: "existing-user-id" },
-    { orderId: "other-order-id", userId: "other-user-id" },
+    {
+      orderId: "existing-order-id",
+      userId: "existing-user-id",
+      valuePence: 100,
+    },
+    { orderId: "other-order-id", userId: "other-user-id", valuePence: 200 },
   ]);
   const orders = orderStore.getOrdersAll();
   const existingUserOrders = orderStore.getOrdersByUserId("existing-user-id");
 
   assert.deepEqual(orders, [
-    { orderId: "existing-order-id", userId: "existing-user-id" },
-    { orderId: "other-order-id", userId: "other-user-id" },
+    {
+      orderId: "existing-order-id",
+      userId: "existing-user-id",
+      valuePence: 100,
+    },
+    { orderId: "other-order-id", userId: "other-user-id", valuePence: 200 },
   ]);
   assert.deepEqual(existingUserOrders, [
-    { orderId: "existing-order-id", userId: "existing-user-id" },
+    {
+      orderId: "existing-order-id",
+      userId: "existing-user-id",
+      valuePence: 100,
+    },
   ]);
   assert.equal(
     orderStore.getOrderById("existing-order-id"),
@@ -34,32 +46,50 @@ test("createOrderStore allows loading orders by id and user id", function () {
 
 test("getOrdersAll returns a copy of all orders", function () {
   const orderStore = createOrderStore([
-    { orderId: "existing-order-id", userId: "existing-user-id" },
+    {
+      orderId: "existing-order-id",
+      userId: "existing-user-id",
+      valuePence: 100,
+    },
   ]);
   const orders = orderStore.getOrdersAll();
 
   orders.push({
     orderId: "extra-order-id",
     userId: "existing-user-id",
+    valuePence: 200,
   });
 
   assert.deepEqual(orderStore.getOrdersAll(), [
-    { orderId: "existing-order-id", userId: "existing-user-id" },
+    {
+      orderId: "existing-order-id",
+      userId: "existing-user-id",
+      valuePence: 100,
+    },
   ]);
 });
 
 test("getOrdersByUserId returns a copy of matching orders", function () {
   const orderStore = createOrderStore([
-    { orderId: "existing-order-id", userId: "existing-user-id" },
+    {
+      orderId: "existing-order-id",
+      userId: "existing-user-id",
+      valuePence: 100,
+    },
   ]);
   const existingUserOrders = orderStore.getOrdersByUserId("existing-user-id");
 
   existingUserOrders.push({
     orderId: "extra-order-id",
     userId: "existing-user-id",
+    valuePence: 200,
   });
 
   assert.deepEqual(orderStore.getOrdersByUserId("existing-user-id"), [
-    { orderId: "existing-order-id", userId: "existing-user-id" },
+    {
+      orderId: "existing-order-id",
+      userId: "existing-user-id",
+      valuePence: 100,
+    },
   ]);
 });

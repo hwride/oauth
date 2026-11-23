@@ -14,12 +14,16 @@ import {
 import type { AuthenticationMethodReference } from "../types/authentication-method-reference.ts";
 import { isUuidV4 } from "../utils/uuid.ts";
 import { escapeHtml } from "../utils/html-utils.ts";
-import { issueAuthorizationCodeAndRedirect } from "../utils/authorization-route-utils.ts";
+import {
+  getMfaChallengeTotpPath,
+  issueAuthorizationCodeAndRedirect,
+} from "../utils/authorization-route-utils.ts";
 import {
   getSessionCookie,
   getSessionCookieClear,
   loadSessionFromCookie,
 } from "../utils/session-utils.ts";
+import { getAcrLevel2, hasAcr } from "../utils/authentication-context-utils.ts";
 
 /**
  * Parameter for OAuth authorization request or OIDC authentication request.
@@ -35,6 +39,7 @@ type AuthorizeParams = {
   code_challenge_method?: string;
   resource?: string;
   max_age?: string;
+  acr_values?: string;
   prompt?: string;
   request?: string;
 };
@@ -197,11 +202,29 @@ export function registerAuthorizationRoute(
     }
     const authTime = Date.now();
 
-    // Challenge MFA when the authenticated user has a registered TOTP factor.
+    const requiresLevel2Acr = hasRequestedLevel2Acr(
+      authorizationRequest,
+      serverConfig.issuer,
+    );
+    const hasRegisteredTotp = userHasRegisteredTotp(user);
+
+    // If the user has requested level-2 acr and does not have MFA registered then reject the request.
+    if (requiresLevel2Acr && !hasRegisteredTotp) {
+      pendingAuthorizationStore.deletePendingAuthorization(tx);
+      return sendRedirectErrorResponse({
+        reply,
+        redirectUri: pending.authorizationRequest.redirectUri,
+        state: pending.authorizationRequest.state,
+        error: "unmet_authentication_requirements",
+        error_description:
+          "The requested authentication context cannot be satisfied",
+      });
+    }
+
+    // Challenge MFA when enabled and the authenticated user has a registered TOTP factor.
     if (
-      user.mfaRegistrations?.some(
-        (registration) => registration.type === "TOTP",
-      )
+      ((user.enforceMfaAtLogin ?? true) || requiresLevel2Acr) &&
+      hasRegisteredTotp
     ) {
       const updateResult = pendingAuthorizationStore.updatePendingAuthorization(
         tx,
@@ -226,7 +249,7 @@ export function registerAuthorizationRoute(
           error_description: "Login transaction not found or expired",
         });
       }
-      return reply.redirect(`/mfa-challenge-totp?tx=${tx}`);
+      return reply.redirect(getMfaChallengeTotpPath(tx));
     }
 
     // Consume the transaction once authorization is complete.
@@ -376,6 +399,9 @@ function validateAuthorizationRequest(
     state: params.state,
     resource: requestedResource,
   };
+  if (params.acr_values != null) {
+    authorizationRequest.acrValues = params.acr_values;
+  }
 
   // Expose PKCE data. https://datatracker.ietf.org/doc/html/rfc7636
   if (params.code_challenge) {
@@ -475,27 +501,36 @@ function handleAuthorizationRequest({
   userStore: ServerContext["userStore"];
 }) {
   const { maxAge, prompt } = authorizationRequest;
+  const requiresMfa = hasRequestedLevel2Acr(
+    authorizationRequest,
+    serverConfig.issuer,
+  );
   const requiresAuthTime = maxAge != null;
 
-  // If there's an existing auth server session and it passes max_age requirements, we can skip authentication and
-  // return immediately.
   const sessionResult = loadSessionFromCookie(request, sessionStore, userStore);
+
+  // Check if an existing session will satisfy authentication requirements.
   if (sessionResult.ok === true) {
-    let canUseSession = true;
+    let canSkipAuthentication = true;
 
     // Force a fresh-auth here.
     if (maxAge === 0 || prompt?.includes("login")) {
-      canUseSession = false;
+      canSkipAuthentication = false;
     }
     // Otherwise if max_age was included, check if our session passes the freshness check.
     else if (maxAge != null && maxAge > 0) {
       const maxAgeMs = maxAge * 1000;
       const sessionAge = Date.now() - sessionResult.session.authTime;
-      canUseSession = sessionAge <= maxAgeMs;
+      canSkipAuthentication = sessionAge <= maxAgeMs;
+    }
+
+    // A level-2 request requires a session established with MFA.
+    if (requiresMfa && !sessionResult.session.amr.includes("mfa")) {
+      canSkipAuthentication = false;
     }
 
     // Otherwise allow re-use of the session.
-    if (canUseSession) {
+    if (canSkipAuthentication) {
       return reply.redirect(
         issueAuthorizationCodeAndRedirect(
           serverConfig,
@@ -527,6 +562,33 @@ function handleAuthorizationRequest({
     });
   }
 
+  // If MFA is required and there is an active session re-use the username/password auth
+  // so we only need to prompt for MFA.
+  if (requiresMfa && sessionResult.ok && !prompt?.includes("login")) {
+    if (!userHasRegisteredTotp(sessionResult.user)) {
+      return sendRedirectErrorResponse({
+        reply,
+        redirectUri: authorizationRequest.redirectUri,
+        state: authorizationRequest.state,
+        error: "unmet_authentication_requirements",
+        error_description:
+          "The requested authentication context cannot be satisfied",
+      });
+    }
+
+    const transactionId = pendingAuthorizationStore.newPendingAuthorization({
+      stage: "mfa",
+      authorizationRequest,
+      userId: sessionResult.user.userId,
+      amr: sessionResult.session.amr,
+      mfaFailedAttempts: 0,
+      expiresAt: Date.now() + serverConfig.mfaTransactionLifetimeSeconds * 1000,
+      requiresAuthTime,
+    });
+
+    return reply.redirect(getMfaChallengeTotpPath(transactionId));
+  }
+
   // Create a new pending authorization transaction.
   const transactionId = pendingAuthorizationStore.newPendingAuthorization({
     stage: "login",
@@ -542,6 +604,21 @@ function handleAuthorizationRequest({
     .send(
       renderLoginPage(loginEndpointPath, authorizationRequest, transactionId),
     );
+}
+
+function hasRequestedLevel2Acr(
+  authorizationRequest: AuthorizationRequest,
+  issuer: string,
+): boolean {
+  return hasAcr(authorizationRequest.acrValues, getAcrLevel2(issuer));
+}
+
+function userHasRegisteredTotp(user: UserRecord): boolean {
+  return (
+    user.mfaRegistrations?.some(
+      (registration) => registration.type === "TOTP",
+    ) ?? false
+  );
 }
 
 function renderLoginPage(
@@ -576,6 +653,7 @@ function renderLoginPage(
   setIfExists("codeChallengeMethod", "code_challenge_method");
   setIfExists("resource", "resource");
   setIfExists("maxAge", "max_age");
+  setIfExists("acrValues", "acr_values");
   if (authorizationRequest.prompt != null) {
     signupPathSearchParams.set("prompt", authorizationRequest.prompt.join(" "));
   }

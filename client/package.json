@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "node --watch client.ts",
+    "test": "node --test",
     "types": "tsc --noEmit"
   },
   "devDependencies": {

@@ -128,3 +128,7 @@ function filterAllowedResourceScopes(
 
   return filteredScopes.length > 0 ? filteredScopes.join(" ") : undefined;
 }
+
+export function getMfaChallengeTotpPath(transactionId: string): string {
+  return `/mfa-challenge-totp?${new URLSearchParams({ tx: transactionId })}`;
+}

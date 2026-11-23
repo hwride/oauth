@@ -9,6 +9,7 @@ export function registerHomeRoute(
     const defaultResource = process.env.DEFAULT_RESOURCE?.trim() ?? "";
     const defaultAudience = process.env.DEFAULT_AUDIENCE?.trim() ?? "";
     const defaultScopes = process.env.DEFAULT_SCOPES?.trim() ?? "";
+    const defaultAcrValues = process.env.DEFAULT_ACR_VALUES?.trim() ?? "";
 
     return reply.view("index.ejs", {
       authServerBaseUrl: authFlowContext.authServerBaseUrl,
@@ -22,6 +23,8 @@ export function registerHomeRoute(
       defaultAudience,
       useDefaultAudience: !!defaultAudience,
       defaultScopes,
+      defaultAcrValues,
+      useDefaultAcrValues: !!defaultAcrValues,
       accessToken: authFlowContext.accessToken,
       idToken: authFlowContext.idToken,
       refreshToken: authFlowContext.refreshToken,

@@ -32,6 +32,8 @@ export async function createMockAuthServer(
       return await new SignJWT({
         sub: payload.sub,
         scope: payload.scope,
+        acr: payload.acr,
+        auth_time: payload.auth_time,
       })
         .setProtectedHeader({ alg: signingAlg, kid })
         .setIssuer(payload.iss ?? issuer)
@@ -65,6 +67,8 @@ type AccessTokenPayload = {
   iss?: string;
   sub?: string;
   scope?: string;
+  acr?: string;
+  auth_time?: number;
   exp?: number;
   nbf?: number;
   aud?: string;

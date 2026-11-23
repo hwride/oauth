@@ -42,6 +42,7 @@ async function main() {
   process.env.CLIENT_ID ??= "client-id-jwt";
   process.env.CLIENT_SECRET ??= "other-test-client-secret";
   process.env.DEFAULT_SCOPES ??= "openid orders:read";
+  process.env.DEFAULT_ACR_VALUES ??= `${new URL(process.env.ISSUER ?? authServerBase).origin}/acr/level-2`;
 
   console.log("Starting authorization server...");
   await startAuthorizationServer();

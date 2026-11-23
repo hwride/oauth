@@ -12,6 +12,7 @@ export function registerAuthorizeRoute(
   fastify.get<{
     Querystring: {
       scope?: string;
+      acr_values?: string;
       resource?: string;
       audience?: string;
       max_age?: string;
@@ -28,6 +29,7 @@ export function registerAuthorizeRoute(
     const clientId = process.env.CLIENT_ID!;
     const {
       scope,
+      acr_values,
       resource,
       audience,
       max_age,
@@ -83,6 +85,9 @@ export function registerAuthorizeRoute(
       authFlowContext.isOidcFlow = trimmedScope.split(/\s+/).includes("openid");
     } else {
       authFlowContext.isOidcFlow = false;
+    }
+    if (acr_values?.trim()) {
+      authorizeParams.acr_values = acr_values.trim();
     }
     if (resource) {
       authorizeParams.resource = resource.trim();

@@ -10,6 +10,8 @@ import {
 
 const ordersApiResourceId = "https://orders-api.example.test";
 const productsApiResourceId = "https://products-api.example.test";
+const highValueOrderAcr = "https://orders-api.example.test/acr/level-2";
+const highValueOrderMaxAuthAgeSeconds = 60;
 
 test("GET /orders returns orders for the authenticated user from the order store", async () => {
   const authServer = await createMockAuthServer();
@@ -37,13 +39,91 @@ test("GET /orders returns orders for the authenticated user from the order store
     );
 
     const body = response.json() as {
-      orders: Array<{ orderId: string; userId: string }>;
+      orders: Array<{ orderId: string; userId: string; valuePence: number }>;
     };
 
     assert.deepEqual(body.orders, [
-      { orderId: "order-001", userId: testUserId },
-      { orderId: "order-002", userId: testUserId },
+      { orderId: "order-001", userId: testUserId, valuePence: 100 },
+      {
+        // If user does not have required ACR orders are redacted.
+        orderId: "order-002",
+        redacted: true,
+        acr_values: highValueOrderAcr,
+      },
     ]);
+  } finally {
+    await resourceServer.close();
+    await authServer.close();
+  }
+});
+
+test("GET /orders returns full orders when the access token has the required acr", async () => {
+  const authServer = await createMockAuthServer();
+  const resourceServer = createTestResourceServer(authServer);
+
+  try {
+    const token = await authServer.createAccessToken({
+      sub: testUserId,
+      scope: "orders:read",
+      acr: highValueOrderAcr,
+      auth_time: Math.floor(Date.now() / 1000),
+      aud: ordersApiResourceId,
+    });
+
+    const response = await resourceServer.inject({
+      method: "GET",
+      url: "/orders",
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), {
+      orders: [
+        { orderId: "order-001", userId: testUserId, valuePence: 100 },
+        { orderId: "order-002", userId: testUserId, valuePence: 10000 },
+      ],
+    });
+  } finally {
+    await resourceServer.close();
+    await authServer.close();
+  }
+});
+
+test("GET /orders redacts high-value orders when authentication is too old", async () => {
+  const authServer = await createMockAuthServer();
+  const resourceServer = createTestResourceServer(authServer);
+
+  try {
+    const token = await authServer.createAccessToken({
+      sub: testUserId,
+      scope: "orders:read",
+      acr: highValueOrderAcr,
+      auth_time:
+        Math.floor(Date.now() / 1000) - highValueOrderMaxAuthAgeSeconds,
+      aud: ordersApiResourceId,
+    });
+
+    const response = await resourceServer.inject({
+      method: "GET",
+      url: "/orders",
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), {
+      orders: [
+        { orderId: "order-001", userId: testUserId, valuePence: 100 },
+        {
+          orderId: "order-002",
+          redacted: true,
+          acr_values: highValueOrderAcr,
+        },
+      ],
+    });
   } finally {
     await resourceServer.close();
     await authServer.close();
@@ -72,14 +152,18 @@ test("GET /orders returns all orders when the access token includes orders:read:
     assert.equal(response.statusCode, 200);
 
     const body = response.json() as {
-      orders: Array<{ orderId: string; userId: string }>;
+      orders: Array<{ orderId: string; userId: string; valuePence: number }>;
     };
 
     assert.deepEqual(body.orders, [
-      { orderId: "order-001", userId: testUserId },
-      { orderId: "order-002", userId: testUserId },
-      { orderId: "order-003", userId: janeUserId },
-      { orderId: "order-004", userId: janeUserId },
+      { orderId: "order-001", userId: testUserId, valuePence: 100 },
+      {
+        orderId: "order-002",
+        redacted: true,
+        acr_values: highValueOrderAcr,
+      },
+      { orderId: "order-003", userId: janeUserId, valuePence: 500 },
+      { orderId: "order-004", userId: janeUserId, valuePence: 2000 },
     ]);
   } finally {
     await resourceServer.close();
@@ -108,7 +192,137 @@ test("GET /orders/:id returns an individual order when it is owned by the authen
 
     assert.equal(response.statusCode, 200);
     assert.deepEqual(response.json(), {
-      order: { orderId: "order-001", userId: testUserId },
+      order: { orderId: "order-001", userId: testUserId, valuePence: 100 },
+    });
+  } finally {
+    await resourceServer.close();
+    await authServer.close();
+  }
+});
+
+test("GET /orders/:id returns 401 when a high-value order lacks the required acr", async () => {
+  const authServer = await createMockAuthServer();
+  const resourceServer = createTestResourceServer(authServer);
+
+  try {
+    const token = await authServer.createAccessToken({
+      sub: testUserId,
+      scope: "orders:read",
+      aud: ordersApiResourceId,
+    });
+
+    const response = await resourceServer.inject({
+      method: "GET",
+      url: "/orders/order-002",
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.equal(response.statusCode, 401);
+    assert.equal(
+      getHeader(response.headers, "www-authenticate"),
+      `Bearer realm="resource-server", error="insufficient_user_authentication", acr_values="${highValueOrderAcr}", max_age="${highValueOrderMaxAuthAgeSeconds}"`,
+    );
+    assert.deepEqual(response.json(), {
+      error: "insufficient_user_authentication",
+    });
+  } finally {
+    await resourceServer.close();
+    await authServer.close();
+  }
+});
+
+test("GET /orders/:id returns a high-value order when the access token has the required acr", async () => {
+  const authServer = await createMockAuthServer();
+  const resourceServer = createTestResourceServer(authServer);
+
+  try {
+    const token = await authServer.createAccessToken({
+      sub: testUserId,
+      scope: "orders:read",
+      acr: highValueOrderAcr,
+      auth_time: Math.floor(Date.now() / 1000),
+      aud: ordersApiResourceId,
+    });
+
+    const response = await resourceServer.inject({
+      method: "GET",
+      url: "/orders/order-002",
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), {
+      order: { orderId: "order-002", userId: testUserId, valuePence: 10000 },
+    });
+  } finally {
+    await resourceServer.close();
+    await authServer.close();
+  }
+});
+
+test("GET /orders/:id returns 401 when authentication is too old", async () => {
+  const authServer = await createMockAuthServer();
+  const resourceServer = createTestResourceServer(authServer);
+
+  try {
+    const token = await authServer.createAccessToken({
+      sub: testUserId,
+      scope: "orders:read",
+      acr: highValueOrderAcr,
+      auth_time:
+        Math.floor(Date.now() / 1000) - highValueOrderMaxAuthAgeSeconds,
+      aud: ordersApiResourceId,
+    });
+
+    const response = await resourceServer.inject({
+      method: "GET",
+      url: "/orders/order-002",
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.equal(response.statusCode, 401);
+    assert.equal(
+      getHeader(response.headers, "www-authenticate"),
+      `Bearer realm="resource-server", error="insufficient_user_authentication", acr_values="${highValueOrderAcr}", max_age="${highValueOrderMaxAuthAgeSeconds}"`,
+    );
+    assert.deepEqual(response.json(), {
+      error: "insufficient_user_authentication",
+    });
+  } finally {
+    await resourceServer.close();
+    await authServer.close();
+  }
+});
+
+test("GET /orders/:id rejects a high-value order when the acr does not exactly match", async () => {
+  const authServer = await createMockAuthServer();
+  const resourceServer = createTestResourceServer(authServer);
+
+  try {
+    const token = await authServer.createAccessToken({
+      sub: testUserId,
+      scope: "orders:read",
+      acr: `${highValueOrderAcr} other`,
+      aud: ordersApiResourceId,
+    });
+
+    const response = await resourceServer.inject({
+      method: "GET",
+      url: "/orders/order-002",
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.equal(response.statusCode, 401);
+    assert.deepEqual(response.json(), {
+      error: "insufficient_user_authentication",
     });
   } finally {
     await resourceServer.close();
@@ -137,7 +351,7 @@ test("GET /orders/:id returns another user's order when the access token include
 
     assert.equal(response.statusCode, 200);
     assert.deepEqual(response.json(), {
-      order: { orderId: "order-003", userId: janeUserId },
+      order: { orderId: "order-003", userId: janeUserId, valuePence: 500 },
     });
   } finally {
     await resourceServer.close();
@@ -452,6 +666,9 @@ function createTestResourceServer(authServer: MockAuthServer) {
       ordersApi: ordersApiResourceId,
       productsApi: productsApiResourceId,
     },
+    highValueOrderPence: 100 * 50,
+    highValueOrderAcr,
+    highValueOrderMaxAuthAgeSeconds,
     acceptedAccessTokenAlgorithms: ["RS256"],
     authServerBase: authServer.authServerBase,
     issuer: authServer.issuer,

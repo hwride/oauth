@@ -145,6 +145,79 @@ test("GET authorization endpoint reuses a fresh session for max_age and save aut
   assert.equal(codeRecord.authTime, session.authTime);
 });
 
+test("GET authorization endpoint fails level 2 when the active session has no MFA factor", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
+  const session = sessionStore.newSession({
+    userId: janeUserId,
+    amr: ["pwd"],
+    authTime: Date.now(),
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      acr_values: "https://issuer.example.test/acr/level-2",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    undefined,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 302);
+  assert.equal(
+    getRedirectUrl(response).searchParams.get("error"),
+    "unmet_authentication_requirements",
+  );
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
+});
+
+test("GET authorization endpoint sends an active non-MFA session directly to MFA for level 2", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const userStore = createUserStore([
+    {
+      userId: "mfa-session-user",
+      username: "mfa-session-user",
+      password: "password",
+      name: "MFA Session User",
+      mfaRegistrations: [
+        {
+          type: "TOTP",
+          secretBase32: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+        },
+      ],
+    },
+  ]);
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
+  const session = sessionStore.newSession({
+    userId: "mfa-session-user",
+    amr: ["pwd"],
+    authTime: Date.now(),
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      acr_values: "https://issuer.example.test/acr/level-2",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    userStore,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 302);
+  assert.equal(getRedirectUrl(response).pathname, "/mfa-challenge-totp");
+});
+
 test("GET authorization endpoint requires login for a stale max_age session", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
@@ -344,6 +417,37 @@ test("GET authorization endpoint rejects prompt=none when max_age is stale", asy
   );
 });
 
+test("GET authorization endpoint does not start step-up MFA for prompt=none", async function () {
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
+  const session = sessionStore.newSession({
+    userId: janeUserId,
+    amr: ["pwd"],
+    authTime: Date.now(),
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      state: "state-value-123",
+      prompt: "none",
+      acr_values: "https://issuer.example.test/acr/level-2",
+    },
+    defaultServerConfig,
+    createAuthorizationCodeStore(),
+    undefined,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 302);
+  assert.deepEqual(Object.fromEntries(getRedirectUrl(response).searchParams), {
+    error: "login_required",
+    error_description: "Login is required",
+    state: "state-value-123",
+  });
+});
+
 test("GET authorization endpoint rejects prompt=none with another prompt", async function () {
   const response = await fetchAuthorizationLoginPage({
     client_id: "client-id-opaque",
@@ -448,7 +552,7 @@ test("POST authorization endpoint redirects to TOTP MFA challenge for users with
     },
     serverConfig,
     authorizationCodeStore,
-    { username: "user", password: "password" },
+    { username: "admin", password: "password" },
     undefined,
     pendingAuthorizationStore,
   );
@@ -474,7 +578,7 @@ test("POST authorization endpoint redirects to TOTP MFA challenge for users with
     codeChallengeMethod: "S256",
     resource: ordersApiResource,
   });
-  assert.equal(pendingAuthorization.userId, testUserId);
+  assert.equal(pendingAuthorization.userId, adminUserId);
   assert.deepEqual(pendingAuthorization.amr, ["pwd"]);
   assert.ok(pendingAuthorization.expiresAt > Date.now());
   assert.ok(pendingAuthorization.expiresAt <= Date.now() + 2_000);
@@ -482,6 +586,145 @@ test("POST authorization endpoint redirects to TOTP MFA challenge for users with
     authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
     undefined,
   );
+});
+
+test("POST authorization endpoint skips MFA when the user disables it", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const response = await submitAuthorizationLogin(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      scope: "openid",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    { username: "user", password: "password" },
+  );
+
+  assert.equal(response.status, 302);
+  const authorizationCode = getRedirectUrl(response).searchParams.get("code");
+  assert.ok(authorizationCode);
+  const authorizationCodeRecord =
+    authorizationCodeStore.loadAuthorizationCode(authorizationCode);
+  assert.ok(authorizationCodeRecord);
+  assert.equal(authorizationCodeRecord.subject, testUserId);
+  assert.deepEqual(authorizationCodeRecord.amr, ["pwd"]);
+});
+
+test("POST authorization endpoint does not prompt MFA for an unsupported acr_values value", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const response = await submitAuthorizationLogin(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      scope: "openid",
+      acr_values: "https://issuer.example.test/acr/level-1",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    { username: "user", password: "password" },
+  );
+
+  assert.equal(response.status, 302);
+  const authorizationCode = getRedirectUrl(response).searchParams.get("code");
+  assert.ok(authorizationCode);
+  assert.equal(
+    authorizationCodeStore.loadAuthorizationCode(authorizationCode)?.subject,
+    testUserId,
+  );
+});
+
+test("POST authorization endpoint prompts for MFA when acr_values requests level 2", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const response = await submitAuthorizationLogin(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      scope: "openid",
+      acr_values: "https://issuer.example.test/acr/level-2",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    { username: "user", password: "password" },
+  );
+
+  assert.equal(response.status, 302);
+  assert.equal(getRedirectUrl(response).pathname, "/mfa-challenge-totp");
+});
+
+test("POST authorization endpoint fails level 2 when the user has no MFA factor", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const userStore = createUserStore([
+    {
+      userId: "no-mfa-user",
+      username: "no-mfa-user",
+      password: "password",
+      name: "No MFA User",
+    },
+  ]);
+  const response = await submitAuthorizationLogin(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      scope: "openid",
+      state: "state-value-123",
+      acr_values: "https://issuer.example.test/acr/level-2",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    { username: "no-mfa-user", password: "password" },
+    userStore,
+  );
+
+  assert.equal(response.status, 302);
+  const redirectUrl = getRedirectUrl(response);
+  assert.equal(
+    redirectUrl.searchParams.get("error"),
+    "unmet_authentication_requirements",
+  );
+  assert.equal(redirectUrl.searchParams.get("state"), "state-value-123");
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
+});
+
+test("POST authorization endpoint enforces MFA by default when the user flag is undefined", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const userStore = createUserStore([
+    {
+      userId: "mfa-default-user",
+      username: "mfa-default-user",
+      password: "password",
+      name: "MFA Default User",
+      mfaRegistrations: [
+        {
+          type: "TOTP",
+          secretBase32: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+        },
+      ],
+    },
+  ]);
+
+  const response = await submitAuthorizationLogin(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      scope: "openid",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    { username: "mfa-default-user", password: "password" },
+    userStore,
+  );
+
+  assert.equal(response.status, 302);
+  assert.equal(getRedirectUrl(response).pathname, "/mfa-challenge-totp");
 });
 
 test("POST authorization endpoint echoes state in the redirect when provided", async function () {
@@ -1198,7 +1441,7 @@ async function submitAuthorizationLogin(
 function getRedirectUrl(response: Response) {
   const location = response.headers.get("location");
   assert.ok(location);
-  return new URL(location);
+  return new URL(location, "http://localhost");
 }
 
 function createUserStoreWithoutMfa() {

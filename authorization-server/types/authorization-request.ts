@@ -12,6 +12,8 @@ export type AuthorizationRequest = {
   resource?: SupportedResource;
   /** Maximum elapsed time in seconds since the End-User's last active authentication. */
   maxAge?: number;
+  /** Space-separated authentication context class references requested by the client. */
+  acrValues?: string;
   /** Specifies whether the Authorization Server prompts the End-User for reauthentication and consent. */
   prompt?: Prompt[];
 };

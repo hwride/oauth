@@ -85,7 +85,12 @@ test("authenticateAccessToken returns the token subject when bearer token is val
       },
     );
 
-    assert.deepEqual(authenticatedUser, { sub: "user-123", scope: undefined });
+    assert.deepEqual(authenticatedUser, {
+      sub: "user-123",
+      scope: undefined,
+      acr: undefined,
+      authTime: undefined,
+    });
     assert.equal(response.statusCode, undefined);
     assert.deepEqual(response.headers, {});
     assert.equal(response.body, undefined);
@@ -118,10 +123,79 @@ test("authenticateAccessToken returns the token scope when bearer token scope is
     assert.deepEqual(authenticatedUser, {
       sub: "user-123",
       scope: "orders:read",
+      acr: undefined,
+      authTime: undefined,
     });
     assert.equal(response.statusCode, undefined);
     assert.deepEqual(response.headers, {});
     assert.equal(response.body, undefined);
+  } finally {
+    await authServer.close();
+  }
+});
+
+test("authenticateAccessToken returns the token acr when an acr claim is present", async () => {
+  const authServer = await createMockAuthServer();
+  const response = createResponse();
+
+  try {
+    const token = await authServer.createAccessToken({
+      sub: "user-123",
+      acr: "https://orders-api.example.test/acr/level-2",
+      aud: verificationConfig.resourceId,
+    });
+
+    const authenticatedUser = await authenticateAccessToken(
+      createRequest(`Bearer ${token}`),
+      response.fastifyReply,
+      {
+        ...verificationConfig,
+        issuer: authServer.issuer,
+        jwksUri: authServer.jwksUri,
+      },
+    );
+
+    assert.deepEqual(authenticatedUser, {
+      sub: "user-123",
+      scope: undefined,
+      acr: "https://orders-api.example.test/acr/level-2",
+      authTime: undefined,
+    });
+    assert.equal(response.statusCode, undefined);
+    assert.deepEqual(response.headers, {});
+    assert.equal(response.body, undefined);
+  } finally {
+    await authServer.close();
+  }
+});
+
+test("authenticateAccessToken returns auth time when an auth_time claim is present", async () => {
+  const authServer = await createMockAuthServer();
+  const response = createResponse();
+
+  try {
+    const token = await authServer.createAccessToken({
+      sub: "user-123",
+      auth_time: 1_700_000_123,
+      aud: verificationConfig.resourceId,
+    });
+
+    const authenticatedUser = await authenticateAccessToken(
+      createRequest(`Bearer ${token}`),
+      response.fastifyReply,
+      {
+        ...verificationConfig,
+        issuer: authServer.issuer,
+        jwksUri: authServer.jwksUri,
+      },
+    );
+
+    assert.deepEqual(authenticatedUser, {
+      sub: "user-123",
+      scope: undefined,
+      acr: undefined,
+      authTime: 1_700_000_123,
+    });
   } finally {
     await authServer.close();
   }

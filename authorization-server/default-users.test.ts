@@ -16,6 +16,7 @@ test("defaultUsers returns the seeded test users", function () {
       password: "password",
       name: "John Wick",
       roles: ["admin"],
+      enforceMfaAtLogin: true,
       mfaRegistrations: [
         {
           type: "TOTP",
@@ -29,6 +30,7 @@ test("defaultUsers returns the seeded test users", function () {
       password: "password",
       name: "John Smith",
       roles: ["customer"],
+      enforceMfaAtLogin: false,
       mfaRegistrations: [
         {
           type: "TOTP",

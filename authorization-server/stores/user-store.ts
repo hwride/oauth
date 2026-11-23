@@ -26,6 +26,8 @@ export type UserRecord = {
   updated_at?: number;
   roles?: Role[];
   allowedScopes?: Scope[];
+  /** Whether a registered MFA factor must be completed during login. Defaults to true. */
+  enforceMfaAtLogin?: boolean;
   mfaRegistrations?: MfaRegistration[];
 };
 
