@@ -199,13 +199,31 @@ export function registerAuthorizationRoute(
     }
     const authTime = Date.now();
 
+    const requiresLevel2Acr = hasRequestedLevel2Acr(
+      authorizationRequest,
+      serverConfig.issuer,
+    );
+    const hasRegisteredTotp = user.mfaRegistrations?.some(
+      (registration) => registration.type === "TOTP",
+    );
+
+    // If the user has requested level-2 acr and does not have MFA registered then reject the request.
+    if (requiresLevel2Acr && !hasRegisteredTotp) {
+      pendingAuthorizationStore.deletePendingAuthorization(tx);
+      return sendRedirectErrorResponse({
+        reply,
+        redirectUri: pending.authorizationRequest.redirectUri,
+        state: pending.authorizationRequest.state,
+        error: "unmet_authentication_requirements",
+        error_description:
+          "The requested authentication context cannot be satisfied",
+      });
+    }
+
     // Challenge MFA when enabled and the authenticated user has a registered TOTP factor.
     if (
-      ((user.enforceMfaAtLogin ?? true) ||
-        hasRequestedLevel2Acr(authorizationRequest, serverConfig.issuer)) &&
-      user.mfaRegistrations?.some(
-        (registration) => registration.type === "TOTP",
-      )
+      ((user.enforceMfaAtLogin ?? true) || requiresLevel2Acr) &&
+      hasRegisteredTotp
     ) {
       const updateResult = pendingAuthorizationStore.updatePendingAuthorization(
         tx,

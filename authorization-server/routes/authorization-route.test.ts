@@ -557,6 +557,44 @@ test("POST authorization endpoint prompts for MFA when acr_values requests level
   assert.equal(getRedirectUrl(response).pathname, "/mfa-challenge-totp");
 });
 
+test("POST authorization endpoint fails level 2 when the user has no MFA factor", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const userStore = createUserStore([
+    {
+      userId: "no-mfa-user",
+      username: "no-mfa-user",
+      password: "password",
+      name: "No MFA User",
+    },
+  ]);
+  const response = await submitAuthorizationLogin(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      scope: "openid",
+      state: "state-value-123",
+      acr_values: "https://issuer.example.test/acr/level-2",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    { username: "no-mfa-user", password: "password" },
+    userStore,
+  );
+
+  assert.equal(response.status, 302);
+  const redirectUrl = getRedirectUrl(response);
+  assert.equal(
+    redirectUrl.searchParams.get("error"),
+    "unmet_authentication_requirements",
+  );
+  assert.equal(redirectUrl.searchParams.get("state"), "state-value-123");
+  assert.equal(
+    authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
+    undefined,
+  );
+});
+
 test("POST authorization endpoint enforces MFA by default when the user flag is undefined", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const userStore = createUserStore([
