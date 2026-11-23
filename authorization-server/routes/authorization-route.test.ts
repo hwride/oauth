@@ -145,7 +145,7 @@ test("GET authorization endpoint reuses a fresh session for max_age and save aut
   assert.equal(codeRecord.authTime, session.authTime);
 });
 
-test("GET authorization endpoint does not reuse a non-MFA session for level 2 acr_values", async function () {
+test("GET authorization endpoint fails level 2 when the active session has no MFA factor", async function () {
   const authorizationCodeStore = createAuthorizationCodeStore();
   const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
   const session = sessionStore.newSession({
@@ -167,12 +167,55 @@ test("GET authorization endpoint does not reuse a non-MFA session for level 2 ac
     `__Host-Http-session-id=${session.sessionId}`,
   );
 
-  assert.equal(response.status, 200);
-  assert.match(await response.text(), /<form method="post"/);
+  assert.equal(response.status, 302);
+  assert.equal(
+    getRedirectUrl(response).searchParams.get("error"),
+    "unmet_authentication_requirements",
+  );
   assert.equal(
     authorizationCodeStore.getGrantByAuthorizationCode("test-auth-code"),
     undefined,
   );
+});
+
+test("GET authorization endpoint sends an active non-MFA session directly to MFA for level 2", async function () {
+  const authorizationCodeStore = createAuthorizationCodeStore();
+  const userStore = createUserStore([
+    {
+      userId: "mfa-session-user",
+      username: "mfa-session-user",
+      password: "password",
+      name: "MFA Session User",
+      mfaRegistrations: [
+        {
+          type: "TOTP",
+          secretBase32: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+        },
+      ],
+    },
+  ]);
+  const sessionStore = createSessionStore({ sessionLengthSeconds: 600 });
+  const session = sessionStore.newSession({
+    userId: "mfa-session-user",
+    amr: ["pwd"],
+    authTime: Date.now(),
+  });
+  const response = await fetchAuthorizationLoginPage(
+    {
+      client_id: "client-id-opaque",
+      response_type: "code",
+      redirect_uri: "http://localhost:3000/callback",
+      acr_values: "https://issuer.example.test/acr/level-2",
+    },
+    defaultServerConfig,
+    authorizationCodeStore,
+    userStore,
+    sessionStore,
+    `__Host-Http-session-id=${session.sessionId}`,
+  );
+
+  assert.equal(response.status, 302);
+  assert.equal(getRedirectUrl(response).pathname, "/mfa-challenge-totp");
 });
 
 test("GET authorization endpoint requires login for a stale max_age session", async function () {
